@@ -4,3 +4,98 @@
 <!-- END_SECTION:BADGES_SECTION -->
 
 goserver is a Go package that encapsulates the logic for running a development and production server. It automatically manages static file serving, external Go server compilation, hot-reloading, and process control, making it easy to switch between development and production modes.
+
+## Basic Usage Example
+
+Here is a minimal example of how to use `goserver` in your Go project:
+
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+	"sync"
+	"github.com/cdvelop/goserver"
+)
+
+func main() {
+	config := &goserver.ServerConfig{
+		RootFolder:               "./web",
+		MainFileWithoutExtension: "main.server",
+		ArgumentsForCompilingServer: func() []string { return []string{} },
+		ArgumentsToRunServer:        func() []string { return []string{} },
+		PublicFolder:             "public",
+		AppPort:                  "8080",
+		Writer:                   os.Stdout,
+		ExitChan:                 make(chan bool),
+	}
+
+	handler := goserver.NewServerHandler(config)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go handler.Start(&wg)
+
+	// Wait for server to finish (in real use, handle signals for graceful shutdown)
+	wg.Wait()
+	fmt.Println("Server stopped.")
+}
+```
+
+## Public API
+
+### Main Types
+
+- **ServerConfig**  
+	Configuration structure for the server.  
+	- `RootFolder`: Project root folder.
+	- `MainFileWithoutExtension`: Base name of the main server file (without extension).
+	- `ArgumentsForCompilingServer`: Function returning arguments for compiling the server.
+	- `ArgumentsToRunServer`: Function returning arguments for running the server.
+	- `PublicFolder`: Static files folder.
+	- `AppPort`: Application port.
+	- `Writer`: Output for logs.
+	- `ExitChan`: Channel to signal shutdown.
+
+- **ServerHandler**  
+	Main server handler, created with `NewServerHandler(*ServerConfig)`.
+
+### Main Methods
+
+- `NewServerHandler(c *ServerConfig) *ServerHandler`  
+	Creates a new server handler.
+
+- `(*ServerHandler) Start(wg *sync.WaitGroup)`  
+	Starts the server (internal or external) as a goroutine.
+
+- `(*ServerHandler) StartExternalServer() error`  
+	Compiles and runs the external server.
+
+- `(*ServerHandler) StartInternalServerFiles()`  
+	Starts an internal HTTP server for static files.
+
+- `(*ServerHandler) StopInternalServer() error`  
+	Stops the internal server.
+
+- `(*ServerHandler) RestartInternalServer() error`  
+	Restarts the internal server.
+
+- `(*ServerHandler) RestartExternalServer() error`  
+	Restarts the external server (stops, recompiles, and runs).
+
+- `(*ServerHandler) RestartServer() (string, error)`  
+	Restarts the current server (internal or external) and returns a status message.
+
+- `(*ServerHandler) NewFileEvent(fileName, extension, filePath, event string) error`  
+	Handles file events (`create`, `write`, etc.) for hot-reload.
+
+- `(*ServerHandler) MainFilePath() string`  
+	Returns the path to the main server file.
+
+- `(*ServerHandler) Name() string`  
+	Returns the server name ("GoServer").
+
+- `(*ServerHandler) UnobservedFiles() []string`  
+	Returns files that should not be watched (executables, temporary files).
