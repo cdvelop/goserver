@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	config := &goserver.ServerConfig{
+	config := &goserver.Config{
 		RootFolder:               "./web",
 		MainFileWithoutExtension: "main.server",
 		ArgumentsForCompilingServer: func() []string { return []string{} },
@@ -32,7 +32,7 @@ func main() {
 		ExitChan:                 make(chan bool),
 	}
 
-	handler := goserver.NewServerHandler(config)
+	handler := goserver.New(config)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -48,7 +48,7 @@ func main() {
 
 ### Main Types
 
-- **ServerConfig**  
+- **Config**  
 	Configuration structure for the server.  
 	- `RootFolder`: Project root folder.
 	- `MainFileWithoutExtension`: Base name of the main server file (without extension).
@@ -60,11 +60,11 @@ func main() {
 	- `ExitChan`: Channel to signal shutdown.
 
 - **ServerHandler**  
-	Main server handler, created with `NewServerHandler(*ServerConfig)`.
+	Main server handler, created with `New(*Config)`.
 
 ### Main Methods
 
-- `NewServerHandler(c *ServerConfig) *ServerHandler`  
+- `New(c *Config) *ServerHandler`  
 	Creates a new server handler.
 
 - `(*ServerHandler) Start(wg *sync.WaitGroup)`  

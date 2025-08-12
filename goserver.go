@@ -12,7 +12,7 @@ import (
 )
 
 type ServerHandler struct {
-	*ServerConfig
+	*Config
 	mainFileExternalServer string // eg: main.server.go
 	internalServerRun      bool
 	server                 *http.Server
@@ -20,7 +20,7 @@ type ServerHandler struct {
 	goRun                  *gorun.GoRun
 }
 
-type ServerConfig struct {
+type Config struct {
 	RootFolder                  string          // eg: web
 	MainFileWithoutExtension    string          // eg: main.server
 	ArgumentsForCompilingServer func() []string // eg: []string{"-X 'main.version=v1.0.0'"}
@@ -31,7 +31,7 @@ type ServerConfig struct {
 	ExitChan                    chan bool       // Canal global para señalizar el cierre
 }
 
-func NewServerHandler(c *ServerConfig) *ServerHandler {
+func New(c *Config) *ServerHandler {
 
 	var exe_ext = ""
 	if runtime.GOOS == "windows" {
@@ -39,7 +39,7 @@ func NewServerHandler(c *ServerConfig) *ServerHandler {
 	}
 
 	sh := &ServerHandler{
-		ServerConfig:           c,
+		Config:                 c,
 		mainFileExternalServer: c.MainFileWithoutExtension + ".go",
 		internalServerRun:      false,
 		server:                 nil,
