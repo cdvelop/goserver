@@ -43,7 +43,7 @@ func (h *ServerHandler) StartInternalServerFiles() {
 		Handler: fs,
 	}
 
-	fmt.Fprintln(h.Writer, "Godev Server Files:", publicFolder, "Running port:", h.AppPort)
+	fmt.Fprintln(h.Writer, "Start Server Files:", publicFolder, "Running port:", h.AppPort)
 	// Iniciar el servidor en una goroutine
 	h.internalServerRun = true
 
@@ -74,7 +74,7 @@ func (h *ServerHandler) RestartInternalServer() error {
 }
 
 func (h *ServerHandler) RestartExternalServer() error {
-	var this = errors.New("Restart External Server")
+	var this = errors.New("restart external server")
 
 	// STOP
 	err := h.goRun.StopProgram()
