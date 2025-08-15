@@ -2,7 +2,6 @@ package goserver
 
 import (
 	"io"
-	"net/http"
 	"path"
 	"runtime"
 	"time"
@@ -14,8 +13,6 @@ import (
 type ServerHandler struct {
 	*Config
 	mainFileExternalServer string // eg: main.server.go
-	internalServerRun      bool
-	server                 *http.Server
 	goCompiler             *gobuild.GoBuild
 	goRun                  *gorun.GoRun
 }
@@ -41,8 +38,6 @@ func New(c *Config) *ServerHandler {
 	sh := &ServerHandler{
 		Config:                 c,
 		mainFileExternalServer: c.MainFileWithoutExtension + ".go",
-		internalServerRun:      false,
-		server:                 nil,
 	}
 	sh.goCompiler = gobuild.New(&gobuild.Config{
 		Command:            "go",
@@ -54,11 +49,12 @@ func New(c *Config) *ServerHandler {
 		Logger:             c.Logger,
 		Timeout:            30 * time.Second,
 	})
-	sh.goRun = gorun.New(&gorun.GoRunConfig{
+	sh.goRun = gorun.New(&gorun.Config{
 		ExecProgramPath: path.Join(c.RootFolder, sh.goCompiler.MainOutputFileNameWithExtension()),
 		RunArguments:    c.ArgumentsToRunServer,
 		ExitChan:        c.ExitChan,
 		Logger:          c.Logger,
+		KillAllOnStop:   true, // Kill all instances when stopping to prevent orphaned processes
 	})
 
 	return sh

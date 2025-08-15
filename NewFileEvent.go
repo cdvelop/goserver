@@ -10,25 +10,15 @@ func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string
 			if h.Logger != nil {
 				fmt.Fprintln(h.Logger, "External server modified, restarting ...")
 			}
-
-			// Stop internal server if running to avoid port conflicts
-			if h.internalServerRun {
-				if err := h.StopInternalServer(); err != nil {
-					return fmt.Errorf("stopping internal server: %w", err)
-				}
-			}
-
 			// Restart external server with new changes
 			return h.RestartExternalServer()
 		}
 
-		// Case 2: Shared Go file was modified
-		if !h.internalServerRun {
-			if h.Logger != nil {
-				fmt.Fprintln(h.Logger, "Shared Go file modified, restarting external server ...")
-			}
-			return h.RestartExternalServer()
+		// Case 2: Any Go file was modified - restart external server
+		if h.Logger != nil {
+			fmt.Fprintln(h.Logger, "Go file modified, restarting external server ...")
 		}
+		return h.RestartExternalServer()
 	}
 
 	// Case 3: External server file was created for first time
@@ -36,14 +26,6 @@ func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string
 		if h.Logger != nil {
 			fmt.Fprintln(h.Logger, "New external server detected")
 		}
-
-		// Stop internal server if running
-		if h.internalServerRun {
-			if err := h.StopInternalServer(); err != nil {
-				return fmt.Errorf("stopping internal server: %w", err)
-			}
-		}
-
 		// Start the new external server
 		return h.StartExternalServer()
 	}
