@@ -55,6 +55,7 @@ func New(c *Config) *ServerHandler {
 		ExitChan:        c.ExitChan,
 		Logger:          c.Logger,
 		KillAllOnStop:   true, // Kill all instances when stopping to prevent orphaned processes
+		WorkingDir:      c.RootFolder,
 	})
 
 	return sh
