@@ -21,14 +21,14 @@ type ServerHandler struct {
 }
 
 type Config struct {
-	RootFolder                  string          // eg: web
-	MainFileWithoutExtension    string          // eg: main.server
-	ArgumentsForCompilingServer func() []string // eg: []string{"-X 'main.version=v1.0.0'"}
-	ArgumentsToRunServer        func() []string // eg: []string{"dev" }
-	PublicFolder                string          // eg: public
-	AppPort                     string          // eg : 8080
-	Writer                      io.Writer       // For logging output
-	ExitChan                    chan bool       // Canal global para señalizar el cierre
+	RootFolder                  string          // e.g., web
+	MainFileWithoutExtension    string          // e.g., main.server
+	ArgumentsForCompilingServer func() []string // e.g., []string{"-X 'main.version=v1.0.0'"}
+	ArgumentsToRunServer        func() []string // e.g., []string{"dev"}
+	PublicFolder                string          // e.g., public
+	AppPort                     string          // e.g., 8080
+	Logger                      io.Writer       // For logging output
+	ExitChan                    chan bool       // Global channel to signal shutdown
 }
 
 func New(c *Config) *ServerHandler {
@@ -51,14 +51,14 @@ func New(c *Config) *ServerHandler {
 		Extension:          exe_ext,
 		CompilingArguments: c.ArgumentsForCompilingServer,
 		OutFolder:          c.RootFolder,
-		Writer:             c.Writer,
+		Logger:             c.Logger,
 		Timeout:            30 * time.Second,
 	})
 	sh.goRun = gorun.New(&gorun.GoRunConfig{
 		ExecProgramPath: path.Join(c.RootFolder, sh.goCompiler.MainOutputFileNameWithExtension()),
 		RunArguments:    c.ArgumentsToRunServer,
 		ExitChan:        c.ExitChan,
-		Writer:          c.Writer,
+		Logger:          c.Logger,
 	})
 
 	return sh

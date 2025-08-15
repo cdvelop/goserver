@@ -5,6 +5,8 @@
 
 goserver is a Go package that encapsulates the logic for running a development and production server. It automatically manages static file serving, external Go server compilation, hot-reloading, and process control, making it easy to switch between development and production modes.
 
+Note: goserver now prefers an external Go server file (e.g. `main.server.go`). If that file is missing the package will generate it from an embedded Markdown template (located in `templates/server_definition.md`), extracting the Go code blocks and writing them to the configured output path. The generator substitutes three template variables: `AppPort`, `PublicFolder` and `RootFolder`. Importantly, the generator never overwrites an existing external server file.
+
 ## Basic Usage Example
 
 Here is a minimal example of how to use `goserver` in your Go project:
@@ -28,7 +30,7 @@ func main() {
 		ArgumentsToRunServer:        func() []string { return []string{} },
 		PublicFolder:             "public",
 		AppPort:                  "8080",
-		Writer:                   os.Stdout,
+		Logger:                   os.Stdout,
 		ExitChan:                 make(chan bool),
 	}
 
@@ -56,7 +58,8 @@ func main() {
 	- `ArgumentsToRunServer`: Function returning arguments for running the server.
 	- `PublicFolder`: Static files folder.
 	- `AppPort`: Application port.
-	- `Writer`: Output for logs.
+	- `Logger`: Output for logs.
+	- Generator behavior: when the external main server file is missing, goserver will create it from an embedded Markdown template. The generator performs simple templating for `AppPort`, `PublicFolder` and `RootFolder`, extracts Go code fenced blocks and writes a single `main` package file. It will not overwrite an existing file.
 	- `ExitChan`: Channel to signal shutdown.
 
 - **ServerHandler**  

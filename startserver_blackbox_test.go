@@ -1,0 +1,63 @@
+package goserver_test
+
+import (
+	"bytes"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+
+	gs "github.com/cdvelop/goserver"
+)
+
+// This is a black-box test: it uses only the public API of the package under test.
+// It verifies that calling StartServer will generate the external server file
+// when it doesn't exist. The test is intentionally lightweight and does not
+// attempt to compile or run the generated binary.
+func TestStartServerGeneratesExternalFile(t *testing.T) {
+	// enabled: run automatically
+
+	tmp := t.TempDir()
+
+	// capture logs into a buffer so we can inspect what StartServer printed
+	var logBuf bytes.Buffer
+
+	cfg := &gs.Config{
+		RootFolder:                  tmp,
+		MainFileWithoutExtension:    "main.server",
+		ArgumentsForCompilingServer: nil,
+		ArgumentsToRunServer:        nil,
+		PublicFolder:                "public",
+		AppPort:                     "9090",
+		Logger:                      &logBuf,
+		ExitChan:                    make(chan bool),
+	}
+
+	h := gs.New(cfg)
+
+	// Ensure external file doesn't exist initially
+	// h.MainFilePath already returns an absolute path using RootFolder
+	target := h.MainFilePath()
+	if _, err := os.Stat(target); err == nil {
+		t.Fatalf("expected no external server file at %s", target)
+	}
+
+	// Start the server in background. StartServer expects a WaitGroup.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go h.StartServer(&wg)
+
+	// Wait for StartServer to finish
+	wg.Wait()
+
+	// Now the generated file should exist
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected generated server file at %s, but not found: %v", target, err)
+	}
+
+	// Verify the logs mention generation (best-effort, since generate logs on success)
+	out := logBuf.String()
+	if !strings.Contains(out, "Generated server file") && !strings.Contains(out, "generate server from markdown") {
+		t.Logf("log output did not contain generation messages: %q", out)
+	}
+}

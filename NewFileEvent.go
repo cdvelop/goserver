@@ -7,7 +7,9 @@ func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string
 	if event == "write" {
 		// Case 1: External server file was modified
 		if fileName == h.mainFileExternalServer {
-			fmt.Fprintln(h.Writer, "External server modified, restarting ...")
+			if h.Logger != nil {
+				fmt.Fprintln(h.Logger, "External server modified, restarting ...")
+			}
 
 			// Stop internal server if running to avoid port conflicts
 			if h.internalServerRun {
@@ -22,14 +24,18 @@ func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string
 
 		// Case 2: Shared Go file was modified
 		if !h.internalServerRun {
-			fmt.Fprintln(h.Writer, "Shared Go file modified, restarting external server ...")
+			if h.Logger != nil {
+				fmt.Fprintln(h.Logger, "Shared Go file modified, restarting external server ...")
+			}
 			return h.RestartExternalServer()
 		}
 	}
 
 	// Case 3: External server file was created for first time
 	if event == "create" && fileName == h.mainFileExternalServer {
-		fmt.Fprintln(h.Writer, "New external server detected")
+		if h.Logger != nil {
+			fmt.Fprintln(h.Logger, "New external server detected")
+		}
 
 		// Stop internal server if running
 		if h.internalServerRun {

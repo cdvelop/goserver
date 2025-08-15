@@ -43,13 +43,17 @@ func (h *ServerHandler) StartInternalServerFiles() {
 		Handler: fs,
 	}
 
-	fmt.Fprintln(h.Writer, "Start Server Files:", publicFolder, "Running port:", h.AppPort)
+	if h.Logger != nil {
+		fmt.Fprintln(h.Logger, "Start Server Files:", publicFolder, "Running port:", h.AppPort)
+	}
 	// Iniciar el servidor en una goroutine
 	h.internalServerRun = true
 
 	go func() {
 		if err := h.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Fprintln(h.Writer, "Internal Server Files error:", err)
+			if h.Logger != nil {
+				fmt.Fprintln(h.Logger, "Internal Server Files error:", err)
+			}
 		}
 	}()
 }
@@ -57,7 +61,7 @@ func (h *ServerHandler) StartInternalServerFiles() {
 func (h *ServerHandler) StopInternalServer() error {
 	if h.server != nil {
 		h.internalServerRun = false
-		// fmt.Fprintln(h.Writer,"Internal Server Stop")
+		// fmt.Fprintln(h.Logger,"Internal Server Stop")
 		return h.server.Close()
 	}
 	return nil
