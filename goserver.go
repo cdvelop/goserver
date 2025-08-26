@@ -50,12 +50,12 @@ func New(c *Config) *ServerHandler {
 		Timeout:            30 * time.Second,
 	})
 	sh.goRun = gorun.New(&gorun.Config{
-		ExecProgramPath: path.Join(c.RootFolder, sh.goCompiler.MainOutputFileNameWithExtension()),
+		ExecProgramPath: "./" + sh.goCompiler.MainOutputFileNameWithExtension(), // Use ./filename to avoid PATH search
 		RunArguments:    c.ArgumentsToRunServer,
 		ExitChan:        c.ExitChan,
 		Logger:          c.Logger,
-		KillAllOnStop:   true, // Kill all instances when stopping to prevent orphaned processes
-		WorkingDir:      c.RootFolder,
+		KillAllOnStop:   true,         // Kill all instances when stopping to prevent orphaned processes
+		WorkingDir:      c.RootFolder, // Execute from the folder containing the binary
 	})
 
 	return sh

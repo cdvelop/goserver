@@ -2,6 +2,7 @@ package goserver
 
 import (
 	"errors"
+	"time"
 )
 
 func (h *ServerHandler) StartExternalServer() error {
@@ -30,6 +31,10 @@ func (h *ServerHandler) RestartExternalServer() error {
 	if err != nil {
 		return errors.Join(this, errors.New("StopProgram"), err)
 	}
+
+	// Wait a brief moment to ensure cleanup is complete
+	// This prevents issues where the previous process hasn't fully released resources
+	time.Sleep(100 * time.Millisecond)
 
 	// COMPILE latest changes
 	err = h.goCompiler.CompileProgram()

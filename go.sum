@@ -1,4 +1,4 @@
 github.com/cdvelop/gobuild v0.0.6 h1:iFFD/RdOH1bVorECzO42aH/VoZ6NFpkI+9mZ0Dpbq48=
 github.com/cdvelop/gobuild v0.0.6/go.mod h1:FR1obeWgvKeZxgkkkBOANgZfu8XCVTQx8rcKSyHuOdM=
-github.com/cdvelop/gorun v0.0.9 h1:USHBSYduzeBzSrW2dKTRRquypZfHkzYI6P4C87XrQqc=
-github.com/cdvelop/gorun v0.0.9/go.mod h1:DhTPzWzM2D7QqZdZYDHulyYwFegovWaH7r0bX/6nRJQ=
+github.com/cdvelop/gorun v0.0.10 h1:KlQsJes/pcn5C6/7xW9zfiZjDWA+rUatLRQ8sx/tcm8=
+github.com/cdvelop/gorun v0.0.10/go.mod h1:DhTPzWzM2D7QqZdZYDHulyYwFegovWaH7r0bX/6nRJQ=
