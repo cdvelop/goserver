@@ -7,7 +7,7 @@ This document outlines the refactoring plan to transform GoServer from a dual-mo
 #### 2.1 Add Template Processing Method
 ```go
 // Template data structure for passing values to the markdown template
-type ServerTemplateData struct {
+type serverTemplateData struct {
     AppPort      string
     PublicFolder string
     RootFolder   string
@@ -37,7 +37,7 @@ var embeddedServerDefinition string
 
 func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
     // Process template
-    templateData := ServerTemplateData{
+    templateData := serverTemplateData{
         AppPort:      h.AppPort,
         PublicFolder: h.PublicFolder,
         RootFolder:   h.RootFolder,
@@ -62,7 +62,7 @@ tional external server) to an auto-generating external server approach. The new 
    if _, err := os.Stat(path.Join(h.RootFolder, h.mainFileExternalServer)); os.IsNotExist(err) {
        h.StartInternalServerFiles()  // Static file server
    } else {
-       h.StartExternalServer()       // Custom Go server
+       h.startServer()       // Custom Go server
    }
    ```
 
@@ -82,12 +82,12 @@ func New(c *Config) *ServerHandler
 
 // Public Methods
 func (h *ServerHandler) Start(wg *sync.WaitGroup)
-func (h *ServerHandler) StartExternalServer() error
+func (h *ServerHandler) startServer() error
 func (h *ServerHandler) StartInternalServerFiles()
 func (h *ServerHandler) StopInternalServer() error
 func (h *ServerHandler) RestartInternalServer() error
-func (h *ServerHandler) RestartExternalServer() error
-func (h *ServerHandler) RestartServer() (string, error)
+func (h *ServerHandler) RestartServer() error
+func (h *ServerHandler) RestartServer() error
 func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string) error
 func (h *ServerHandler) MainFilePath() string
 func (h *ServerHandler) Name() string
@@ -112,7 +112,7 @@ if _, err := os.Stat(path.Join(h.RootFolder, h.mainFileExternalServer)); os.IsNo
     }
 }
 // Always start external server
-err := h.StartExternalServer()
+err := h.startServer()
 ```
 
 ## Implementation Plan
@@ -253,10 +253,10 @@ func (h *ServerHandler) UnobservedFiles() []string
 
 
 // methods (implementation details)
-func (h *ServerHandler) startExternalServer() error => StartServer
-func (h *ServerHandler) restartExternalServer() error => RestartServer
+func (h *ServerHandler) startServer() error => StartServer
+func (h *ServerHandler) RestartServer() error => RestartServer
 func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error
-func (h *ServerHandler) processTemplate(markdown string, data ServerTemplateData) string
+func (h *ServerHandler) processTemplate(markdown string, data serverTemplateData) string
 func (h *ServerHandler) extractGoCodeFromMarkdown(markdown string) string
 func (h *ServerHandler) writeServerFile(content string) error
 ```
@@ -274,11 +274,11 @@ func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string
     switch event {
     case "write":
         if fileName == h.mainFileExternalServer || extension == ".go" {
-            return h.restartExternalServer()
+            return h.RestartServer()
         }
     case "create":
         if fileName == h.mainFileExternalServer {
-            return h.startExternalServer()
+            return h.startServer()
         }
     }
     return nil
@@ -332,11 +332,11 @@ type Config struct {
 ## Implementation Questions & Alternatives
 
 ### Question 1: Template Data Structure Extension
-**Current Decision**: Keep `ServerTemplateData` minimal with only essential fields
+**Current Decision**: Keep `serverTemplateData` minimal with only essential fields
 
 **Final Structure**:
 ```go
-type ServerTemplateData struct {
+type serverTemplateData struct {
     AppPort      string // e.g., "8080"
     PublicFolder string // e.g., "public"
     RootFolder   string // e.g., "web"
@@ -359,7 +359,7 @@ type ServerTemplateData struct {
 
 **Implementation**:
 ```go
-func (h *ServerHandler) processTemplate(markdown string, data ServerTemplateData) string {
+func (h *ServerHandler) processTemplate(markdown string, data serverTemplateData) string {
     tmpl, err := template.New("server").Parse(markdown)
     if err != nil {
         fmt.Fprintf(h.Writer, "Template parsing error (using fallback): %v\n", err)
@@ -482,7 +482,7 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 ## Testing Strategy
 
 ### Unit Tests
-1. **Template Processing**: Test Go template processing with ServerTemplateData
+1. **Template Processing**: Test Go template processing with serverTemplateData
 2. **Markdown Parsing**: Test Go code block extraction using regex (concatenation of multiple blocks)
 3. **File Generation**: Test file creation and content accuracy
 4. **Error Handling**: Test various failure scenarios
@@ -501,14 +501,14 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 
 ### Milestone 1: Template Processing System (Week 1)
 - [ ] Create server definition markdown file with template variables
-- [ ] Implement Go template processing with ServerTemplateData and graceful error handling
+- [ ] Implement Go template processing with serverTemplateData and graceful error handling
 - [ ] Implement regex-based Go code extraction (concatenating multiple blocks)
 - [ ] Add embedded markdown to binary
 - [ ] Unit tests for template and parsing system
 
 ### Milestone 2: Code Generation (Week 2)
 - [ ] Implement `generateServerFromEmbeddedMarkdown()` with file overwrite protection
-- [ ] Add ServerTemplateData structure and processing
+- [ ] Add serverTemplateData structure and processing
 - [ ] Integrate with Start() method
 - [ ] Add error logging using Logger field
 - [ ] Integration tests
@@ -558,7 +558,7 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 
 This refactoring plan transforms GoServer from a dual-mode system to a streamlined auto-generating external server approach. Key decisions finalized:
 
-- **Template System**: Go html/template with minimal ServerTemplateData structure
+- **Template System**: Go html/template with minimal serverTemplateData structure
 - **Error Handling**: Graceful fallback with logging via Config.Logger (renamed from Writer)
 - **Code Extraction**: Regex-based parsing with concatenation of multiple Go code blocks
 - **File Protection**: Never overwrite existing files under any circumstances

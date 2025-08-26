@@ -1,6 +1,7 @@
 package goserver
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -18,9 +19,28 @@ func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
 		}
 	}
 
-	// build and run external server
-	err := h.StartExternalServer()
+	// build and run server
+	err := h.startServer()
 	if err != nil {
-		fmt.Fprintln(h.Logger, "starting external server:", err)
+		fmt.Fprintln(h.Logger, "starting server:", err)
 	}
+}
+
+// private server start
+func (h *ServerHandler) startServer() error {
+	this := errors.New("start server")
+
+	// ALWAYS COMPILE before running to ensure latest changes
+	err := h.goCompiler.CompileProgram()
+	if err != nil {
+		return errors.Join(this, err)
+	}
+
+	// RUN
+	err = h.goRun.RunProgram()
+	if err != nil {
+		return errors.Join(this, err)
+	}
+
+	return nil
 }

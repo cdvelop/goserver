@@ -16,7 +16,7 @@ import (
 	. "github.com/cdvelop/goserver"
 )
 
-// TestRestartCleanup tests that RestartExternalServer properly cleans up processes
+// TestRestartCleanup tests that RestartServer properly cleans up processes
 func TestRestartCleanup(t *testing.T) {
 	// Enable this test manually
 	// t.Skip("integration test - enable manually")
@@ -124,9 +124,9 @@ func main() {
 
 	// Test 1: Initial start
 	t.Log("🚀 Starting external server (v1)...")
-	err = h.StartExternalServer()
+	err = h.startServer()
 	if err != nil {
-		t.Fatalf("StartExternalServer failed: %v", err)
+		t.Fatalf("startServer failed: %v", err)
 	}
 
 	// Wait and verify server responds
@@ -216,9 +216,9 @@ func main() {
 	}
 
 	// Attempt restart
-	err = h.RestartExternalServer()
+	err = h.RestartServer()
 	if err != nil {
-		t.Logf("❌ RestartExternalServer failed: %v", err)
+		t.Logf("❌ RestartServer failed: %v", err)
 
 		// Check what's using the port now
 		checkCmd2 := exec.Command("lsof", "-i", ":"+fmt.Sprintf("%d", port))

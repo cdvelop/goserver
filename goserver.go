@@ -35,6 +35,9 @@ func New(c *Config) *ServerHandler {
 		exe_ext = ".exe"
 	}
 
+	// Ensure logger is safe for concurrent writes
+	c.Logger = ensureSyncWriter(c.Logger)
+
 	sh := &ServerHandler{
 		Config:                 c,
 		mainFileExternalServer: c.MainFileWithoutExtension + ".go",

@@ -14,7 +14,7 @@ import (
 //go:embed templates/*
 var embeddedFS embed.FS
 
-type ServerTemplateData struct {
+type serverTemplateData struct {
 	AppPort      string
 	PublicFolder string
 	RootFolder   string
@@ -33,7 +33,7 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 		return nil
 	}
 
-	data := ServerTemplateData{
+	data := serverTemplateData{
 		AppPort:      h.AppPort,
 		PublicFolder: h.PublicFolder,
 		RootFolder:   h.RootFolder,
@@ -75,7 +75,7 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 	return nil
 }
 
-func (h *ServerHandler) processTemplate(markdown string, data ServerTemplateData) (string, error) {
+func (h *ServerHandler) processTemplate(markdown string, data serverTemplateData) (string, error) {
 	tmpl, err := template.New("server").Parse(markdown)
 	if err != nil {
 		if h.Logger != nil {

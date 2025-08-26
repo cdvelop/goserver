@@ -1,13 +1,10 @@
-package goserver_test
+package goserver
 
 import (
-	"bytes"
 	"os"
 	"strings"
 	"sync"
 	"testing"
-
-	gs "github.com/cdvelop/goserver"
 )
 
 // This is a black-box test: it uses only the public API of the package under test.
@@ -20,9 +17,9 @@ func TestStartServerGeneratesExternalFile(t *testing.T) {
 	tmp := t.TempDir()
 
 	// capture logs into a buffer so we can inspect what StartServer printed
-	var logBuf bytes.Buffer
+	var logBuf safeBuffer
 
-	cfg := &gs.Config{
+	cfg := &Config{
 		RootFolder:                  tmp,
 		MainFileWithoutExtension:    "main.server",
 		ArgumentsForCompilingServer: nil,
@@ -33,7 +30,7 @@ func TestStartServerGeneratesExternalFile(t *testing.T) {
 		ExitChan:                    make(chan bool),
 	}
 
-	h := gs.New(cfg)
+	h := New(cfg)
 
 	// Ensure external file doesn't exist initially
 	// h.MainFilePath already returns an absolute path using RootFolder

@@ -1,14 +1,11 @@
-package goserver_test
+package goserver
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
-
-	gs "github.com/cdvelop/goserver"
 )
 
 // TestStartServerAlwaysRecompiles verifica que StartServer siempre recompile el servidor
@@ -16,7 +13,7 @@ import (
 func TestStartServerAlwaysRecompiles(t *testing.T) {
 	tmp := t.TempDir()
 
-	var logBuf bytes.Buffer
+	var logBuf safeBuffer
 
 	// Create public folder
 	publicDir := filepath.Join(tmp, "public")
@@ -24,7 +21,7 @@ func TestStartServerAlwaysRecompiles(t *testing.T) {
 		t.Fatalf("creating public folder: %v", err)
 	}
 
-	cfg := &gs.Config{
+	cfg := &Config{
 		RootFolder:                  tmp,
 		MainFileWithoutExtension:    "main.server",
 		ArgumentsForCompilingServer: nil,
@@ -35,7 +32,7 @@ func TestStartServerAlwaysRecompiles(t *testing.T) {
 		ExitChan:                    make(chan bool, 1),
 	}
 
-	handler := gs.New(cfg)
+	handler := New(cfg)
 
 	// First, create the server file
 	serverFile := filepath.Join(tmp, "main.server.go")
@@ -122,7 +119,7 @@ func main() {
 func TestNewFileEventTriggersRecompilation(t *testing.T) {
 	tmp := t.TempDir()
 
-	var logBuf bytes.Buffer
+	var logBuf safeBuffer
 
 	// Create public folder
 	publicDir := filepath.Join(tmp, "public")
@@ -130,7 +127,7 @@ func TestNewFileEventTriggersRecompilation(t *testing.T) {
 		t.Fatalf("creating public folder: %v", err)
 	}
 
-	cfg := &gs.Config{
+	cfg := &Config{
 		RootFolder:                  tmp,
 		MainFileWithoutExtension:    "main.server",
 		ArgumentsForCompilingServer: nil,
@@ -141,7 +138,7 @@ func TestNewFileEventTriggersRecompilation(t *testing.T) {
 		ExitChan:                    make(chan bool, 1),
 	}
 
-	handler := gs.New(cfg)
+	handler := New(cfg)
 
 	// Create the server file
 	serverFile := filepath.Join(tmp, "main.server.go")
@@ -208,7 +205,7 @@ func main() {
 func TestNewFileEventOnOtherGoFiles(t *testing.T) {
 	tmp := t.TempDir()
 
-	var logBuf bytes.Buffer
+	var logBuf safeBuffer
 
 	// Create public folder
 	publicDir := filepath.Join(tmp, "public")
@@ -216,7 +213,7 @@ func TestNewFileEventOnOtherGoFiles(t *testing.T) {
 		t.Fatalf("creating public folder: %v", err)
 	}
 
-	cfg := &gs.Config{
+	cfg := &Config{
 		RootFolder:                  tmp,
 		MainFileWithoutExtension:    "main.server",
 		ArgumentsForCompilingServer: nil,
@@ -227,7 +224,7 @@ func TestNewFileEventOnOtherGoFiles(t *testing.T) {
 		ExitChan:                    make(chan bool, 1),
 	}
 
-	handler := gs.New(cfg)
+	handler := New(cfg)
 
 	// Create the server file
 	serverFile := filepath.Join(tmp, "main.server.go")

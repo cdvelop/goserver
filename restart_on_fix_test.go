@@ -1,14 +1,11 @@
-package goserver_test
+package goserver
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
-
-	gs "github.com/cdvelop/goserver"
 )
 
 // Test that when a write produces a compilation error, fixing the file and
@@ -16,7 +13,7 @@ import (
 func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 	tmp := t.TempDir()
 
-	var logBuf bytes.Buffer
+	var logBuf safeBuffer
 
 	// Create public folder
 	publicDir := filepath.Join(tmp, "public")
@@ -24,7 +21,7 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 		t.Fatalf("creating public folder: %v", err)
 	}
 
-	cfg := &gs.Config{
+	cfg := &Config{
 		RootFolder:                  tmp,
 		MainFileWithoutExtension:    "main.server",
 		ArgumentsForCompilingServer: nil,
@@ -35,7 +32,7 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 		ExitChan:                    make(chan bool, 1),
 	}
 
-	handler := gs.New(cfg)
+	handler := New(cfg)
 
 	serverFile := filepath.Join(tmp, "main.server.go")
 

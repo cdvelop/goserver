@@ -5,31 +5,13 @@ import (
 	"time"
 )
 
-func (h *ServerHandler) StartExternalServer() error {
-	this := errors.New("StartExternalServer")
-
-	// ALWAYS COMPILE before running to ensure latest changes
-	err := h.goCompiler.CompileProgram()
-	if err != nil {
-		return errors.Join(this, err)
-	}
-
-	// RUN
-	err = h.goRun.RunProgram()
-	if err != nil {
-		return errors.Join(this, err)
-	}
-
-	return nil
-}
-
-func (h *ServerHandler) RestartExternalServer() error {
-	var this = errors.New("restart external server")
+func (h *ServerHandler) RestartServer() error {
+	var this = errors.New("restart server")
 
 	// STOP current server
 	err := h.goRun.StopProgram()
 	if err != nil {
-		return errors.Join(this, errors.New("StopProgram"), err)
+		return errors.Join(this, errors.New("stop server"), err)
 	}
 
 	// Wait a brief moment to ensure cleanup is complete
@@ -39,23 +21,14 @@ func (h *ServerHandler) RestartExternalServer() error {
 	// COMPILE latest changes
 	err = h.goCompiler.CompileProgram()
 	if err != nil {
-		return errors.Join(this, errors.New("CompileProgram"), err)
+		return errors.Join(this, errors.New("compile server"), err)
 	}
 
 	// RUN new version
 	err = h.goRun.RunProgram()
 	if err != nil {
-		return errors.Join(this, errors.New("RunProgram"), err)
+		return errors.Join(this, errors.New("run server"), err)
 	}
 
 	return nil
-}
-
-// RestartServer reinicia el servidor externo y devuelve un mensaje de estado
-func (h *ServerHandler) RestartServer() (string, error) {
-	err := h.RestartExternalServer()
-	if err != nil {
-		return "Error restarting external server", err
-	}
-	return "External server restarted", nil
 }

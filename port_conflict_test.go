@@ -96,7 +96,7 @@ func main() {
 
 	// Test 1: Start server normally
 	t.Log("🚀 Starting first server instance...")
-	err = h.StartExternalServer()
+	err = h.startServer()
 	if err != nil {
 		t.Logf("❌ First server failed as expected due to occupied port: %v", err)
 	} else {
@@ -123,7 +123,7 @@ func main() {
 	h2 := New(cfg2)
 
 	// This should fail with "address already in use"
-	err = h2.StartExternalServer()
+	err = h2.startServer()
 	if err != nil {
 		t.Logf("✅ Second server failed as expected: %v", err)
 	} else {
@@ -135,9 +135,9 @@ func main() {
 
 	// Test 3: Try restart - this should work now that the port is free
 	t.Log("🔄 Attempting restart on first server...")
-	err = h.RestartExternalServer()
+	err = h.RestartServer()
 	if err != nil {
-		t.Logf("❌ RestartExternalServer failed: %v", err)
+		t.Logf("❌ RestartServer failed: %v", err)
 	} else {
 		t.Log("✅ Restart completed successfully")
 
