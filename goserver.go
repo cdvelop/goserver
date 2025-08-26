@@ -2,7 +2,6 @@ package goserver
 
 import (
 	"io"
-	"path"
 	"runtime"
 	"time"
 
@@ -41,7 +40,7 @@ func New(c *Config) *ServerHandler {
 	}
 	sh.goCompiler = gobuild.New(&gobuild.Config{
 		Command:            "go",
-		MainFilePath:       path.Join(c.RootFolder, sh.mainFileExternalServer),
+		MainFilePath:       sh.mainFileExternalServer, // Use just the filename since OutFolder is the target directory
 		OutName:            c.MainFileWithoutExtension,
 		Extension:          exe_ext,
 		CompilingArguments: c.ArgumentsForCompilingServer,
