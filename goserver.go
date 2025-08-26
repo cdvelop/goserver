@@ -2,6 +2,7 @@ package goserver
 
 import (
 	"io"
+	"path"
 	"runtime"
 	"time"
 
@@ -62,7 +63,10 @@ func New(c *Config) *ServerHandler {
 
 // MainFilePath eg: <root>/web/main.server.go
 func (h *ServerHandler) MainFilePath() string {
-	return h.goCompiler.MainFilePath()
+	// Return the external server file path inside the configured RootFolder.
+	// This ensures callers (and tests) get the absolute path used for generation
+	// instead of just the filename.
+	return path.Join(h.RootFolder, h.mainFileExternalServer)
 
 } // Name returns "GoServer"
 func (h *ServerHandler) Name() string {
