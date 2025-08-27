@@ -71,9 +71,6 @@ func (h *ServerHandler) MainFilePath() string {
 	// instead of just the filename.
 	return path.Join(h.RootFolder, h.mainFileExternalServer)
 
-} // Name returns "GoServer"
-func (h *ServerHandler) Name() string {
-	return "GoServer"
 }
 
 // UnobservedFiles returns the list of files that should not be tracked by file watchers eg: main.exe, main_temp.exe
