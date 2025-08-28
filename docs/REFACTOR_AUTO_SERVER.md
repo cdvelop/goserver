@@ -89,7 +89,7 @@ func (h *ServerHandler) RestartInternalServer() error
 func (h *ServerHandler) RestartServer() error
 func (h *ServerHandler) RestartServer() error
 func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string) error
-func (h *ServerHandler) MainFilePath() string
+func (h *ServerHandler) MainFileRelativePath() string
 func (h *ServerHandler) Name() string
 func (h *ServerHandler) UnobservedFiles() []string
 ```
@@ -247,7 +247,7 @@ type ServerHandler struct {
 func New(c *Config) *ServerHandler
 func (h *ServerHandler) Start(wg *sync.WaitGroup) => StartServer
 func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string) error
-func (h *ServerHandler) MainFilePath() string
+func (h *ServerHandler) MainFileRelativePath() string
 func (h *ServerHandler) Name() string
 func (h *ServerHandler) UnobservedFiles() []string
 

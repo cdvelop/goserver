@@ -62,7 +62,7 @@ func TestStartServerRunsGeneratedServerAndResponds(t *testing.T) {
 	h := gs.New(cfg)
 
 	// Ensure external file absent
-	target := h.MainFilePath()
+	target := h.MainFileRelativePath()
 	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("expected no external server file at %s", target)
 	}

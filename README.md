@@ -27,7 +27,7 @@ Public API (types and functions)
 - type `ServerHandler`
 	- Construct with: `New(c *Config) *ServerHandler`
 	- Exported methods (signatures as found in source):
-		- `MainFilePath() string` — returns the path to the generated/external main server file inside the configured `RootFolder`.
+		- `MainFileRelativePath() string` — returns the path to the generated/external main server file inside the configured `RootFolder`.
 		- `Name() string` — returns the server name (`"GoServer"`).
 		- `UnobservedFiles() []string` — files that should not be observed by file watchers (executables, temp files).
 		- `RestartServer() error` — restart the external server.
