@@ -33,8 +33,8 @@ func TestStartServerGeneratesExternalFile(t *testing.T) {
 	h := New(cfg)
 
 	// Ensure external file doesn't exist initially
-	// h.MainFileRelativePath already returns an absolute path using RootFolder
-	target := h.MainFileRelativePath()
+	// h.MainInputFileRelativePath already returns an absolute path using RootFolder
+	target := h.MainInputFileRelativePath()
 	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("expected no external server file at %s", target)
 	}
