@@ -71,3 +71,6 @@ func main() {
 ```
 
 If you want more documentation about embedded templates or design rationale, consult the `templates/` and `docs/` folders which contain implementation docs — they are not part of the exported API surface described here.
+
+
+## [Contributing](https://github.com/cdvelop/cdvelop/blob/main/CONTRIBUTING.md)

@@ -13,9 +13,9 @@ func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string
 		fmt.Fprintln(h.Logger, "Go file modified, restarting external server ...")
 		err := h.RestartServer()
 		if err != nil {
-			fmt.Fprintf(h.Logger, "DEBUG: RestartServer failed: %v\n", err)
+			fmt.Fprintf(h.Logger, "RestartServer failed: %v\n", err)
 		} else {
-			fmt.Fprintln(h.Logger, "DEBUG: RestartServer succeeded")
+			fmt.Fprintln(h.Logger, "RestartServer succeeded")
 		}
 		return err
 	}
@@ -23,7 +23,7 @@ func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string
 	// Case 2: External server file was created for first time
 	if event == "create" && fileName == h.mainFileExternalServer {
 		fmt.Fprintln(h.Logger, "New external server detected")
-		// Start the new external server
+		// Start the new server
 		return h.startServer()
 	}
 

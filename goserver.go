@@ -3,6 +3,7 @@ package goserver
 import (
 	"io"
 	"path"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -18,7 +19,8 @@ type ServerHandler struct {
 }
 
 type Config struct {
-	RootFolder                  string          // e.g., web
+	AppRootDir                  string          // e.g., /home/user/project (application root directory)
+	RootFolder                  string          // e.g., web (relative to AppRootDir or absolute path)
 	MainFileWithoutExtension    string          // e.g., main.server
 	ArgumentsForCompilingServer func() []string // e.g., []string{"-X 'main.version=v1.0.0'"}
 	ArgumentsToRunServer        func() []string // e.g., []string{"dev"}
@@ -64,13 +66,22 @@ func New(c *Config) *ServerHandler {
 	return sh
 }
 
-// MainInputFileRelativePath eg: <root>/web/main.server.go
+// MainInputFileRelativePath returns the path relative to AppRootDir (e.g., "pwa/main.server.go")
 func (h *ServerHandler) MainInputFileRelativePath() string {
-	// Return the external server file path inside the configured RootFolder.
-	// This ensures callers (and tests) get the absolute path used for generation
-	// instead of just the filename.
-	return path.Join(h.RootFolder, h.mainFileExternalServer)
+	// Calculate relative path from AppRootDir to the server file
+	if h.AppRootDir != "" {
+		// If RootFolder is absolute, make it relative to AppRootDir
+		relativeRootFolder := h.RootFolder
+		if filepath.IsAbs(h.RootFolder) {
+			if rel, err := filepath.Rel(h.AppRootDir, h.RootFolder); err == nil {
+				relativeRootFolder = rel
+			}
+		}
+		return filepath.Join(relativeRootFolder, h.mainFileExternalServer)
+	}
 
+	// Fallback to the old behavior if AppRootDir is not set
+	return path.Join(h.RootFolder, h.mainFileExternalServer)
 }
 
 // UnobservedFiles returns the list of files that should not be tracked by file watchers eg: main.exe, main_temp.exe
