@@ -84,6 +84,10 @@ func (h *ServerHandler) MainInputFileRelativePath() string {
 	return path.Join(h.RootFolder, h.mainFileExternalServer)
 }
 
+func (h *ServerHandler) SupportedExtensions() []string {
+	return []string{".go"}
+}
+
 // UnobservedFiles returns the list of files that should not be tracked by file watchers eg: main.exe, main_temp.exe
 func (h *ServerHandler) UnobservedFiles() []string {
 	return h.goCompiler.UnobservedFiles()
