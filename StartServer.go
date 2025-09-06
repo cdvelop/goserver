@@ -2,7 +2,6 @@ package goserver
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"sync"
@@ -15,14 +14,14 @@ func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
 	if _, err := os.Stat(path.Join(h.RootFolder, h.mainFileExternalServer)); os.IsNotExist(err) {
 		// If external server file doesn't exist, generate it from embedded markdown
 		if err := h.generateServerFromEmbeddedMarkdown(); err != nil {
-			fmt.Fprintln(h.Logger, "generate server from markdown:", err)
+			h.Logger("generate server from markdown:", err)
 		}
 	}
 
 	// build and run server
 	err := h.startServer()
 	if err != nil {
-		fmt.Fprintln(h.Logger, "starting server:", err)
+		h.Logger("starting server:", err)
 	}
 }
 

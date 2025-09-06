@@ -46,7 +46,7 @@ func TestGeneratedServerStartsAndResponds(t *testing.T) {
 		ArgumentsToRunServer:        nil,
 		PublicFolder:                "public",
 		AppPort:                     fmt.Sprintf("%d", port),
-		Logger:                      os.Stdout,
+		Logger:                      func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
 		ExitChan:                    make(chan bool),
 	}
 

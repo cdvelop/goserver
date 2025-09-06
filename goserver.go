@@ -1,7 +1,6 @@
 package goserver
 
 import (
-	"io"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -19,15 +18,15 @@ type ServerHandler struct {
 }
 
 type Config struct {
-	AppRootDir                  string          // e.g., /home/user/project (application root directory)
-	RootFolder                  string          // e.g., web (relative to AppRootDir or absolute path)
-	MainFileWithoutExtension    string          // e.g., main.server
-	ArgumentsForCompilingServer func() []string // e.g., []string{"-X 'main.version=v1.0.0'"}
-	ArgumentsToRunServer        func() []string // e.g., []string{"dev"}
-	PublicFolder                string          // e.g., public
-	AppPort                     string          // e.g., 8080
-	Logger                      io.Writer       // For logging output
-	ExitChan                    chan bool       // Global channel to signal shutdown
+	AppRootDir                  string               // e.g., /home/user/project (application root directory)
+	RootFolder                  string               // e.g., web (relative to AppRootDir or absolute path)
+	MainFileWithoutExtension    string               // e.g., main.server
+	ArgumentsForCompilingServer func() []string      // e.g., []string{"-X 'main.version=v1.0.0'"}
+	ArgumentsToRunServer        func() []string      // e.g., []string{"dev"}
+	PublicFolder                string               // e.g., public
+	AppPort                     string               // e.g., 8080
+	Logger                      func(message ...any) // For logging output
+	ExitChan                    chan bool            // Global channel to signal shutdown
 }
 
 func New(c *Config) *ServerHandler {
@@ -36,9 +35,6 @@ func New(c *Config) *ServerHandler {
 	if runtime.GOOS == "windows" {
 		exe_ext = ".exe"
 	}
-
-	// Ensure logger is safe for concurrent writes
-	c.Logger = ensureSyncWriter(c.Logger)
 
 	sh := &ServerHandler{
 		Config:                 c,

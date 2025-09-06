@@ -1,6 +1,7 @@
 package goserver
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -17,7 +18,10 @@ func TestStartServerGeneratesExternalFile(t *testing.T) {
 	tmp := t.TempDir()
 
 	// capture logs into a buffer so we can inspect what StartServer printed
-	var logBuf safeBuffer
+	var logMessages []string
+	logger := func(messages ...any) {
+		logMessages = append(logMessages, fmt.Sprint(messages...))
+	}
 
 	cfg := &Config{
 		RootFolder:                  tmp,
@@ -26,7 +30,7 @@ func TestStartServerGeneratesExternalFile(t *testing.T) {
 		ArgumentsToRunServer:        nil,
 		PublicFolder:                "public",
 		AppPort:                     "9090",
-		Logger:                      &logBuf,
+		Logger:                      logger,
 		ExitChan:                    make(chan bool),
 	}
 
@@ -53,7 +57,7 @@ func TestStartServerGeneratesExternalFile(t *testing.T) {
 	}
 
 	// Verify the logs mention generation (best-effort, since generate logs on success)
-	out := logBuf.String()
+	out := strings.Join(logMessages, "\n")
 	if !strings.Contains(out, "Generated server file") && !strings.Contains(out, "generate server from markdown") {
 		t.Logf("log output did not contain generation messages: %q", out)
 	}

@@ -1,8 +1,10 @@
 package goserver
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +15,10 @@ import (
 func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 	tmp := t.TempDir()
 
-	var logBuf safeBuffer
+	var logMessages []string
+	logger := func(messages ...any) {
+		logMessages = append(logMessages, fmt.Sprint(messages...))
+	}
 
 	// Create public folder
 	publicDir := filepath.Join(tmp, "public")
@@ -28,7 +33,7 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 		ArgumentsToRunServer:        nil,
 		PublicFolder:                "public",
 		AppPort:                     "0",
-		Logger:                      &logBuf,
+		Logger:                      logger,
 		ExitChan:                    make(chan bool, 1),
 	}
 
@@ -126,7 +131,7 @@ func main() {
 	// Give it time to recompile and start
 	time.Sleep(500 * time.Millisecond)
 
-	logOutput := logBuf.String()
+	logOutput := strings.Join(logMessages, "\n")
 	if logOutput == "" {
 		t.Error("expected logs after successful restart, got none")
 	}

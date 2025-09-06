@@ -1,6 +1,7 @@
 package goserver
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ func newTestHandler(t *testing.T, root string) *ServerHandler {
 		ArgumentsToRunServer:        nil,
 		PublicFolder:                "public",
 		AppPort:                     "9090",
-		Logger:                      os.Stdout,
+		Logger:                      func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
 		ExitChan:                    make(chan bool),
 	}
 	return New(cfg)

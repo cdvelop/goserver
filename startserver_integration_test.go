@@ -35,6 +35,9 @@ func TestStartServerRunsGeneratedServerAndResponds(t *testing.T) {
 	l.Close()
 
 	var logBuf bytes.Buffer
+	logger := func(messages ...any) {
+		fmt.Fprintln(&logBuf, messages...)
+	}
 
 	// create public folder and a simple index file that the generated server should serve
 	publicDir := filepath.Join(tmp, "public")
@@ -55,7 +58,7 @@ func TestStartServerRunsGeneratedServerAndResponds(t *testing.T) {
 		// pass absolute public folder so generated server can find files regardless of working dir
 		PublicFolder: publicDir,
 		AppPort:      fmt.Sprintf("%d", port),
-		Logger:       &logBuf,
+		Logger:       logger,
 		ExitChan:     make(chan bool, 1),
 	}
 
