@@ -15,9 +15,12 @@ import (
 func TestStartServerAlwaysRecompiles(t *testing.T) {
 	tmp := t.TempDir()
 
+	var mu sync.Mutex
 	var logMessages []string
 	logger := func(messages ...any) {
+		mu.Lock()
 		logMessages = append(logMessages, fmt.Sprint(messages...))
+		mu.Unlock()
 	}
 
 	// Create public folder
@@ -96,7 +99,9 @@ func main() {
 	}
 
 	// Clear the log buffer to check for new compilation
+	mu.Lock()
 	logMessages = nil
+	mu.Unlock()
 
 	// Start the server again - it should recompile
 	cfg.ExitChan = make(chan bool, 1) // Reset exit channel
@@ -108,24 +113,31 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// Check logs to ensure compilation happened
+	mu.Lock()
 	if len(logMessages) == 0 {
 		t.Error("Expected compilation logs but got none")
 	}
+	mu.Unlock()
 
 	// Stop the server
 	cfg.ExitChan <- true
 	time.Sleep(100 * time.Millisecond)
 
+	mu.Lock()
 	t.Logf("Compilation logs: %v", logMessages)
+	mu.Unlock()
 }
 
 // TestNewFileEventTriggersRecompilation verifica que NewFileEvent recompile cuando se notifica
 func TestNewFileEventTriggersRecompilation(t *testing.T) {
 	tmp := t.TempDir()
 
+	var mu sync.Mutex
 	var logMessages []string
 	logger := func(messages ...any) {
+		mu.Lock()
 		logMessages = append(logMessages, fmt.Sprint(messages...))
+		mu.Unlock()
 	}
 
 	// Create public folder
@@ -179,7 +191,9 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// Clear the log buffer to check for recompilation triggered by file event
+	mu.Lock()
 	logMessages = nil
+	mu.Unlock()
 
 	// Simulate a file write event on the main server file
 	err := handler.NewFileEvent("main.server.go", "go", serverFile, "write")
@@ -191,12 +205,14 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// Check logs to ensure recompilation happened
+	mu.Lock()
 	if len(logMessages) == 0 {
 		t.Error("Expected recompilation logs but got none")
 	}
 
 	// The log should contain messages about restarting
 	logOutput := strings.Join(logMessages, "\n")
+	mu.Unlock()
 	if !containsAny(logOutput, []string{"Go file modified", "restarting"}) {
 		t.Errorf("Expected restart messages in logs, got: %s", logOutput)
 	}
@@ -212,9 +228,12 @@ func main() {
 func TestNewFileEventOnOtherGoFiles(t *testing.T) {
 	tmp := t.TempDir()
 
+	var mu sync.Mutex
 	var logMessages []string
 	logger := func(messages ...any) {
+		mu.Lock()
 		logMessages = append(logMessages, fmt.Sprint(messages...))
+		mu.Unlock()
 	}
 
 	// Create public folder
@@ -280,7 +299,9 @@ func UtilFunction() string {
 	time.Sleep(500 * time.Millisecond)
 
 	// Clear the log buffer
+	mu.Lock()
 	logMessages = nil
+	mu.Unlock()
 
 	// Simulate a file write event on the shared Go file
 	err := handler.NewFileEvent("utils.go", "go", sharedFile, "write")
@@ -292,12 +313,14 @@ func UtilFunction() string {
 	time.Sleep(500 * time.Millisecond)
 
 	// Check logs to ensure recompilation happened
+	mu.Lock()
 	if len(logMessages) == 0 {
 		t.Error("Expected recompilation logs but got none")
 	}
 
 	// The log should contain messages about restarting
 	logOutput := strings.Join(logMessages, "\n")
+	mu.Unlock()
 	if !containsAny(logOutput, []string{"Go file modified", "restarting"}) {
 		t.Errorf("Expected restart messages in logs, got: %s", logOutput)
 	}

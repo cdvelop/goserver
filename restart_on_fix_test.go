@@ -15,9 +15,12 @@ import (
 func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 	tmp := t.TempDir()
 
+	var mu sync.Mutex
 	var logMessages []string
 	logger := func(messages ...any) {
+		mu.Lock()
 		logMessages = append(logMessages, fmt.Sprint(messages...))
+		mu.Unlock()
 	}
 
 	// Create public folder
@@ -131,7 +134,9 @@ func main() {
 	// Give it time to recompile and start
 	time.Sleep(500 * time.Millisecond)
 
+	mu.Lock()
 	logOutput := strings.Join(logMessages, "\n")
+	mu.Unlock()
 	if logOutput == "" {
 		t.Error("expected logs after successful restart, got none")
 	}
