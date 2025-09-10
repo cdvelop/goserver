@@ -60,7 +60,7 @@ func (h *ServerHandler) startServer() error {
 		return errors.Join(e, err)
 	}
 
-	h.Logger("Started")
+	h.Logger("Started:", h.mainFileExternalServer, "Port:", h.AppPort)
 
 	return nil
 }
