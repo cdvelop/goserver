@@ -3,7 +3,7 @@ package goserver
 // event: create,write,remove,rename
 func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string) error {
 
-	h.Logger("File event:", fileName, extension, filePath, event)
+	//h.Logger("File event:", fileName, extension, filePath, event)
 
 	if event == "write" {
 		// Case 1: External server file was modified
@@ -20,7 +20,7 @@ func (h *ServerHandler) NewFileEvent(fileName, extension, filePath, event string
 
 	// Case 2: External server file was created for first time
 	if event == "create" && fileName == h.mainFileExternalServer {
-		h.Logger("New external server detected")
+		//h.Logger("New external server detected")
 		// Start the new server
 		return h.startServer()
 	}

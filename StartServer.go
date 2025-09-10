@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"strings"
 	"sync"
 )
 
@@ -21,25 +22,45 @@ func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
 	// build and run server
 	err := h.startServer()
 	if err != nil {
-		h.Logger("starting server:", err)
+
+		ignoreError := []string{
+			"signal: killed",    // initial compile may fail if file is being created
+			"signal: interrupt", // compile error
+		}
+
+		// print the error only when none of the ignored patterns match
+		shouldIgnore := false
+		for _, v := range ignoreError {
+			if strings.Contains(err.Error(), v) {
+				shouldIgnore = true
+				break
+			}
+		}
+		if !shouldIgnore {
+			h.Logger(err)
+		}
 	}
+
 }
 
 // private server start
 func (h *ServerHandler) startServer() error {
-	this := errors.New("start server")
+
+	e := errors.New("startServer")
 
 	// ALWAYS COMPILE before running to ensure latest changes
 	err := h.goCompiler.CompileProgram()
 	if err != nil {
-		return errors.Join(this, err)
+		return errors.Join(e, err)
 	}
 
 	// RUN
 	err = h.goRun.RunProgram()
 	if err != nil {
-		return errors.Join(this, err)
+		return errors.Join(e, err)
 	}
+
+	h.Logger("Started")
 
 	return nil
 }
