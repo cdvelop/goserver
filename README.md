@@ -13,19 +13,21 @@ Public API (types and functions)
 
 - type `Config`
 	- Fields (public fields used by the package):
-		- `RootFolder string`
-		- `MainFileWithoutExtension string`
+		- `AppRootDir string`
+		- `SourceDir string`
+		- `OutputDir string`
 		- `ArgumentsForCompilingServer func() []string`
 		- `ArgumentsToRunServer func() []string`
-		- `PublicFolder string`
 		- `AppPort string`
 		- `Logger func(message ...any)`
 		- `ExitChan chan bool`
 
+- func `NewConfig() *Config` — returns a new Config with sensible default values
+
 - type `ServerHandler`
 	- Construct with: `New(c *Config) *ServerHandler`
 	- Exported methods (signatures as found in source):
-		- `MainInputFileRelativePath() string` — returns the path to the generated/external main server file inside the configured `RootFolder`.
+		- `MainInputFileRelativePath() string` — returns the path to the generated/external main server file inside the configured `SourceDir`.
 		- `Name() string` — returns the server name (`"GoServer"`).
 		- `UnobservedFiles() []string` — files that should not be observed by file watchers (executables, temp files).
 		- `RestartServer() error` — restart the external server.
@@ -50,11 +52,11 @@ import (
 
 func main() {
 		cfg := &goserver.Config{
-				RootFolder:               "./web",
-				MainFileWithoutExtension: "main.server",
+				AppRootDir:               ".",
+				SourceDir:                "src/cmd/appserver",
+				OutputDir:                "deploy/appserver",
 				ArgumentsForCompilingServer: func() []string { return []string{} },
 				ArgumentsToRunServer:        func() []string { return []string{} },
-				PublicFolder:             "public",
 				AppPort:                  "8080",
 				Logger:                   func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
 				ExitChan:                 make(chan bool),

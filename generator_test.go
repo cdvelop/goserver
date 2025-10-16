@@ -53,7 +53,7 @@ func TestGenerateCreatesFile(t *testing.T) {
 		t.Errorf("generated file missing substituted AppPort (9090)")
 	}
 	// Verify it uses the new environment variable pattern
-	if !strings.Contains(content, `publicDir = "public"`) {
+	if !strings.Contains(content, `publicDir = "`+DefaultPublicDir+`"`) {
 		t.Errorf("generated file missing default public dir assignment")
 	}
 }

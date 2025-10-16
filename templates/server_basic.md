@@ -24,7 +24,7 @@ func main() {
     // Default to "public" but allow overriding with PUBLIC_DIR env var
     publicDir := os.Getenv("PUBLIC_DIR")
     if publicDir == "" {
-        publicDir = "public"
+        publicDir = "src/web/public"
     }
 
     // Serve static files
