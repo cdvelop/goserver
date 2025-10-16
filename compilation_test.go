@@ -23,27 +23,29 @@ func TestStartServerAlwaysRecompiles(t *testing.T) {
 		mu.Unlock()
 	}
 
-	// Create public folder
-	publicDir := filepath.Join(tmp, "public")
-	if err := os.MkdirAll(publicDir, 0755); err != nil {
-		t.Fatalf("creating public folder: %v", err)
+	// Define source and output directories
+	sourceDir := filepath.Join(tmp, "src", "app")
+	outputDir := filepath.Join(tmp, "deploy")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("creating source directory: %v", err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatalf("creating output directory: %v", err)
 	}
 
 	cfg := &Config{
-		RootFolder:                  tmp,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		PublicFolder:                "public",
-		AppPort:                     "0", // Use port 0 for automatic assignment
-		Logger:                      logger,
-		ExitChan:                    make(chan bool, 1),
+		AppRootDir: tmp,
+		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))), // "src/app"
+		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))), // "deploy"
+		AppPort:    "0", // Use port 0 for automatic assignment
+		Logger:     logger,
+		ExitChan:   make(chan bool, 1),
 	}
 
 	handler := New(cfg)
 
-	// First, create the server file
-	serverFile := filepath.Join(tmp, "main.server.go")
+	// First, create the server file in the source directory
+	serverFile := filepath.Join(sourceDir, "main.go")
 	initialContent := `package main
 
 import (
@@ -140,27 +142,29 @@ func TestNewFileEventTriggersRecompilation(t *testing.T) {
 		mu.Unlock()
 	}
 
-	// Create public folder
-	publicDir := filepath.Join(tmp, "public")
-	if err := os.MkdirAll(publicDir, 0755); err != nil {
-		t.Fatalf("creating public folder: %v", err)
+	// Define source and output directories
+	sourceDir := filepath.Join(tmp, "src", "app")
+	outputDir := filepath.Join(tmp, "deploy")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("creating source directory: %v", err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatalf("creating output directory: %v", err)
 	}
 
 	cfg := &Config{
-		RootFolder:                  tmp,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		PublicFolder:                "public",
-		AppPort:                     "0", // Use port 0 for automatic assignment
-		Logger:                      logger,
-		ExitChan:                    make(chan bool, 1),
+		AppRootDir: tmp,
+		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
+		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
+		AppPort:    "0", // Use port 0 for automatic assignment
+		Logger:     logger,
+		ExitChan:   make(chan bool, 1),
 	}
 
 	handler := New(cfg)
 
-	// Create the server file
-	serverFile := filepath.Join(tmp, "main.server.go")
+	// Create the server file in the source directory
+	serverFile := filepath.Join(sourceDir, "main.go")
 	initialContent := `package main
 
 import (
@@ -196,7 +200,7 @@ func main() {
 	mu.Unlock()
 
 	// Simulate a file write event on the main server file
-	err := handler.NewFileEvent("main.server.go", "go", serverFile, "write")
+	err := handler.NewFileEvent("main.go", "go", serverFile, "write")
 	if err != nil {
 		t.Fatalf("NewFileEvent failed: %v", err)
 	}
@@ -236,27 +240,29 @@ func TestNewFileEventOnOtherGoFiles(t *testing.T) {
 		mu.Unlock()
 	}
 
-	// Create public folder
-	publicDir := filepath.Join(tmp, "public")
-	if err := os.MkdirAll(publicDir, 0755); err != nil {
-		t.Fatalf("creating public folder: %v", err)
+	// Define source and output directories
+	sourceDir := filepath.Join(tmp, "src", "app")
+	outputDir := filepath.Join(tmp, "deploy")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("creating source directory: %v", err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatalf("creating output directory: %v", err)
 	}
 
 	cfg := &Config{
-		RootFolder:                  tmp,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		PublicFolder:                "public",
-		AppPort:                     "0",
-		Logger:                      logger,
-		ExitChan:                    make(chan bool, 1),
+		AppRootDir: tmp,
+		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
+		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
+		AppPort:    "0",
+		Logger:     logger,
+		ExitChan:   make(chan bool, 1),
 	}
 
 	handler := New(cfg)
 
-	// Create the server file
-	serverFile := filepath.Join(tmp, "main.server.go")
+	// Create the server file in the source directory
+	serverFile := filepath.Join(sourceDir, "main.go")
 	serverContent := `package main
 
 import (

@@ -12,7 +12,9 @@ import (
 func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	if _, err := os.Stat(path.Join(h.RootFolder, h.mainFileExternalServer)); os.IsNotExist(err) {
+	// Check for the main file in the source directory relative to the app root
+	mainFilePath := path.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)
+	if _, err := os.Stat(mainFilePath); os.IsNotExist(err) {
 		// If external server file doesn't exist, generate it from embedded markdown
 		if err := h.generateServerFromEmbeddedMarkdown(); err != nil {
 			h.Logger("generate server from markdown:", err)
@@ -60,7 +62,7 @@ func (h *ServerHandler) startServer() error {
 		return errors.Join(e, err)
 	}
 
-	h.Logger("Started:", h.RootFolder+"/"+h.mainFileExternalServer, "Port:", h.AppPort)
+	h.Logger("Started:", path.Join(h.SourceDir, h.mainFileExternalServer), "Port:", h.AppPort)
 
 	return nil
 }

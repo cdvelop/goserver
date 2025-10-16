@@ -23,26 +23,28 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 		mu.Unlock()
 	}
 
-	// Create public folder
-	publicDir := filepath.Join(tmp, "public")
-	if err := os.MkdirAll(publicDir, 0755); err != nil {
-		t.Fatalf("creating public folder: %v", err)
+	// Define source and output directories
+	sourceDir := filepath.Join(tmp, "src", "app")
+	outputDir := filepath.Join(tmp, "deploy")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("creating source directory: %v", err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatalf("creating output directory: %v", err)
 	}
 
 	cfg := &Config{
-		RootFolder:                  tmp,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		PublicFolder:                "public",
-		AppPort:                     "0",
-		Logger:                      logger,
-		ExitChan:                    make(chan bool, 1),
+		AppRootDir: tmp,
+		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
+		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
+		AppPort:    "0",
+		Logger:     logger,
+		ExitChan:   make(chan bool, 1),
 	}
 
 	handler := New(cfg)
 
-	serverFile := filepath.Join(tmp, "main.server.go")
+	serverFile := filepath.Join(sourceDir, "main.go")
 
 	// Initial correct content so the server starts
 	initialContent := `package main
@@ -96,7 +98,7 @@ func main() {
 	}
 
 	// Trigger file event - this should attempt restart and fail due to compile error
-	err := handler.NewFileEvent("main.server.go", "go", serverFile, "write")
+	err := handler.NewFileEvent("main.go", "go", serverFile, "write")
 	if err == nil {
 		t.Fatalf("expected error when restarting with broken code, got nil")
 	}
@@ -126,7 +128,7 @@ func main() {
 	}
 
 	// Trigger file event again - this should succeed
-	err = handler.NewFileEvent("main.server.go", "go", serverFile, "write")
+	err = handler.NewFileEvent("main.go", "go", serverFile, "write")
 	if err != nil {
 		t.Fatalf("expected restart to succeed after fix, got error: %v", err)
 	}

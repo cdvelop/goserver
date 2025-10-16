@@ -8,27 +8,31 @@ import (
 	"testing"
 )
 
-func newTestHandler(t *testing.T, root string) *ServerHandler {
+func newTestHandler(t *testing.T, sourceDir, outputDir, appRootDir string) *ServerHandler {
 	t.Helper()
 	cfg := &Config{
-		RootFolder:                  root,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		PublicFolder:                "public",
-		AppPort:                     "9090",
-		Logger:                      func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
-		ExitChan:                    make(chan bool),
+		AppRootDir: appRootDir,
+		SourceDir:  sourceDir,
+		OutputDir:  outputDir,
+		AppPort:    "9090",
+		Logger:     func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
+		ExitChan:   make(chan bool),
 	}
 	return New(cfg)
 }
 
 func TestGenerateCreatesFile(t *testing.T) {
 	tmp := t.TempDir()
-	h := newTestHandler(t, tmp)
+	sourceDir := "src/app"
+	outputDir := "deploy"
+	fullSourcePath := filepath.Join(tmp, sourceDir)
+	if err := os.MkdirAll(fullSourcePath, 0755); err != nil {
+		t.Fatalf("creating source dir: %v", err)
+	}
+	h := newTestHandler(t, sourceDir, outputDir, tmp)
 
 	// Ensure no existing file
-	target := filepath.Join(tmp, h.mainFileExternalServer)
+	target := filepath.Join(fullSourcePath, h.mainFileExternalServer)
 	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("expected no existing file at %s", target)
 	}
@@ -48,15 +52,22 @@ func TestGenerateCreatesFile(t *testing.T) {
 	if !strings.Contains(content, "9090") {
 		t.Errorf("generated file missing substituted AppPort (9090)")
 	}
-	if !strings.Contains(content, "public") {
-		t.Errorf("generated file missing substituted PublicFolder (public)")
+	// Verify it uses the new environment variable pattern
+	if !strings.Contains(content, `publicDir = "public"`) {
+		t.Errorf("generated file missing default public dir assignment")
 	}
 }
 
 func TestGenerateDoesNotOverwrite(t *testing.T) {
 	tmp := t.TempDir()
-	h := newTestHandler(t, tmp)
-	target := filepath.Join(tmp, h.mainFileExternalServer)
+	sourceDir := "src/app"
+	outputDir := "deploy"
+	fullSourcePath := filepath.Join(tmp, sourceDir)
+	if err := os.MkdirAll(fullSourcePath, 0755); err != nil {
+		t.Fatalf("creating source dir: %v", err)
+	}
+	h := newTestHandler(t, sourceDir, outputDir, tmp)
+	target := filepath.Join(fullSourcePath, h.mainFileExternalServer)
 
 	orig := "__ORIGINAL__"
 	if err := os.WriteFile(target, []byte(orig), 0644); err != nil {
@@ -77,8 +88,8 @@ func TestGenerateDoesNotOverwrite(t *testing.T) {
 }
 
 func TestExtractConcatenation(t *testing.T) {
-	// Use a dummy handler
-	h := newTestHandler(t, t.TempDir())
+	// Use a dummy handler; paths don't matter for this test
+	h := newTestHandler(t, "src", "deploy", t.TempDir())
 
 	md := "Some text\n```go\npackage main\n\nfunc A(){}\n```\nMore\n```go\nfunc B(){}\n```\n"
 	out := h.extractGoCodeFromMarkdown(md)

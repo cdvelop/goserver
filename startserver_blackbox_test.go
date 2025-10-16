@@ -3,6 +3,7 @@ package goserver
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -24,21 +25,18 @@ func TestStartServerGeneratesExternalFile(t *testing.T) {
 	}
 
 	cfg := &Config{
-		RootFolder:                  tmp,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		PublicFolder:                "public",
-		AppPort:                     "9090",
-		Logger:                      logger,
-		ExitChan:                    make(chan bool),
+		AppRootDir: tmp,
+		SourceDir:  "src/app",
+		OutputDir:  "deploy",
+		AppPort:    "9090",
+		Logger:     logger,
+		ExitChan:   make(chan bool),
 	}
 
 	h := New(cfg)
 
 	// Ensure external file doesn't exist initially
-	// h.MainInputFileRelativePath already returns an absolute path using RootFolder
-	target := h.MainInputFileRelativePath()
+	target := filepath.Join(h.AppRootDir, h.MainInputFileRelativePath())
 	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("expected no external server file at %s", target)
 	}
