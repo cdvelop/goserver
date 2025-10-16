@@ -18,11 +18,15 @@ import (
 func main() {
     port := os.Getenv("PORT")
     if port == "" {
-        port = "{{.AppPort}}"  // Template variable
+        port = "{{.AppPort}}"
     }
-    
-    publicDir := "{{.PublicFolder}}"  // Template variable
-    
+
+    // Default to "public" but allow overriding with PUBLIC_DIR env var
+    publicDir := os.Getenv("PUBLIC_DIR")
+    if publicDir == "" {
+        publicDir = "public"
+    }
+
     // Serve static files
     fs := http.FileServer(http.Dir(publicDir))
 

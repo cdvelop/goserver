@@ -15,15 +15,14 @@ import (
 var embeddedFS embed.FS
 
 type serverTemplateData struct {
-	AppPort      string
-	PublicFolder string
-	RootFolder   string
+	AppPort string
 }
 
 // generateServerFromEmbeddedMarkdown creates the external server go file from the embedded markdown
 // It never overwrites an existing file. If template processing fails, logs to Logger and uses raw markdown.
 func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
-	targetPath := path.Join(h.RootFolder, h.mainFileExternalServer)
+	// The new convention places the generated main.go file in the SourceDir
+	targetPath := path.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)
 
 	// Never overwrite existing files
 	if _, err := os.Stat(targetPath); err == nil {
@@ -34,9 +33,7 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 	}
 
 	data := serverTemplateData{
-		AppPort:      h.AppPort,
-		PublicFolder: h.PublicFolder,
-		RootFolder:   h.RootFolder,
+		AppPort: h.AppPort,
 	}
 
 	// read embedded markdown
@@ -60,9 +57,10 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 		return fmt.Errorf("no go code blocks found in embedded server definition")
 	}
 
-	// Ensure target directory exists
-	if err := os.MkdirAll(h.RootFolder, 0755); err != nil {
-		return fmt.Errorf("creating root folder: %w", err)
+	// Ensure target directory exists by using the directory of the target path
+	targetDir := path.Dir(targetPath)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return fmt.Errorf("creating source directory '%s': %w", targetDir, err)
 	}
 
 	if err := os.WriteFile(targetPath, []byte(code), 0644); err != nil {

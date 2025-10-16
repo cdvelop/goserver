@@ -76,20 +76,24 @@ func main() {
 }
 `, port)
 
-	mainPath := filepath.Join(tmp, "main.server.go")
+	sourceDir := filepath.Join(tmp, "src", "app")
+	outputDir := filepath.Join(tmp, "deploy")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("creating source directory: %v", err)
+	}
+
+	mainPath := filepath.Join(sourceDir, "main.go")
 	if err := os.WriteFile(mainPath, []byte(serverCode), 0644); err != nil {
-		t.Fatalf("creating main.server.go: %v", err)
+		t.Fatalf("creating main.go: %v", err)
 	}
 
 	cfg := &Config{
-		RootFolder:                  tmp,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		PublicFolder:                "public",
-		AppPort:                     fmt.Sprintf("%d", port),
-		Logger:                      func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
-		ExitChan:                    make(chan bool),
+		AppRootDir: tmp,
+		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
+		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
+		AppPort:    fmt.Sprintf("%d", port),
+		Logger:     func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
+		ExitChan:   make(chan bool),
 	}
 
 	h := New(cfg)
@@ -110,14 +114,12 @@ func main() {
 
 	// Create second handler with same port
 	cfg2 := &Config{
-		RootFolder:                  tmp,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		PublicFolder:                "public",
-		AppPort:                     fmt.Sprintf("%d", port),
-		Logger:                      func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
-		ExitChan:                    make(chan bool),
+		AppRootDir: tmp,
+		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
+		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
+		AppPort:    fmt.Sprintf("%d", port),
+		Logger:     func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
+		ExitChan:   make(chan bool),
 	}
 
 	h2 := New(cfg2)

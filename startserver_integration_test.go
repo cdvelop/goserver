@@ -50,16 +50,24 @@ func TestStartServerRunsGeneratedServerAndResponds(t *testing.T) {
 		t.Fatalf("writing index.html: %v", err)
 	}
 
+	sourceDir := "src/app"
+	outputDir := "deploy"
+	fullSourcePath := filepath.Join(tmp, sourceDir)
+	if err := os.MkdirAll(fullSourcePath, 0755); err != nil {
+		t.Fatalf("creating source dir: %v", err)
+	}
+
 	cfg := &gs.Config{
-		RootFolder:                  tmp,
-		MainFileWithoutExtension:    "main.server",
-		ArgumentsForCompilingServer: nil,
-		ArgumentsToRunServer:        nil,
-		// pass absolute public folder so generated server can find files regardless of working dir
-		PublicFolder: publicDir,
-		AppPort:      fmt.Sprintf("%d", port),
-		Logger:       logger,
-		ExitChan:     make(chan bool, 1),
+		AppRootDir: tmp,
+		SourceDir:  sourceDir,
+		OutputDir:  outputDir,
+		AppPort:    fmt.Sprintf("%d", port),
+		Logger:     logger,
+		ExitChan:   make(chan bool, 1),
+		ArgumentsToRunServer: func() []string {
+			// Pass the public directory to the server as an environment variable
+			return []string{fmt.Sprintf("PUBLIC_DIR=%s", publicDir)}
+		},
 	}
 
 	h := gs.New(cfg)
