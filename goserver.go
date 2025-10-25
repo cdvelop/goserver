@@ -21,6 +21,7 @@ type Config struct {
 	AppRootDir                  string               // e.g., /home/user/project (application root directory)
 	SourceDir                   string               // directory location of main.go e.g., src/cmd/appserver (relative to AppRootDir)
 	OutputDir                   string               // compilation and execution directory e.g., deploy/appserver (relative to AppRootDir)
+	PublicDir                   string               // default public dir for generated server (e.g., src/web/public)
 	ArgumentsForCompilingServer func() []string      // e.g., []string{"-X 'main.version=v1.0.0'"}
 	ArgumentsToRunServer        func() []string      // e.g., []string{"dev"}
 	AppPort                     string               // e.g., 8080
@@ -34,6 +35,7 @@ func NewConfig() *Config {
 		AppRootDir: ".",
 		SourceDir:  "src/cmd/appserver",
 		OutputDir:  "deploy/appserver",
+		PublicDir:  "src/web/public",
 		AppPort:    "8080",
 		Logger: func(message ...any) {
 			// Silent by default
@@ -43,6 +45,42 @@ func NewConfig() *Config {
 }
 
 func New(c *Config) *ServerHandler {
+	// Accept nil and fill missing fields with defaults to avoid panics when caller
+	// provides a partially populated Config.
+	dc := NewConfig() // default config
+
+	if c == nil {
+		c = dc
+	} else {
+		// Fill zero-value fields with defaults to be defensive
+		if c.AppRootDir == "" {
+			c.AppRootDir = dc.AppRootDir
+		}
+		if c.SourceDir == "" {
+			c.SourceDir = dc.SourceDir
+		}
+		if c.OutputDir == "" {
+			c.OutputDir = dc.OutputDir
+		}
+		if c.PublicDir == "" {
+			c.PublicDir = dc.PublicDir
+		}
+		if c.AppPort == "" {
+			c.AppPort = dc.AppPort
+		}
+		if c.Logger == nil {
+			c.Logger = func(message ...any) {}
+		}
+		if c.ExitChan == nil {
+			c.ExitChan = make(chan bool)
+		}
+		if c.ArgumentsForCompilingServer == nil {
+			c.ArgumentsForCompilingServer = func() []string { return nil }
+		}
+		if c.ArgumentsToRunServer == nil {
+			c.ArgumentsToRunServer = func() []string { return nil }
+		}
+	}
 	// Ensure the output directory exists
 	if err := os.MkdirAll(filepath.Join(c.AppRootDir, c.OutputDir), 0755); err != nil {
 		if c.Logger != nil {

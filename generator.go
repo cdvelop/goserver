@@ -15,11 +15,9 @@ import (
 var embeddedFS embed.FS
 
 type serverTemplateData struct {
-	AppPort          string
-	DefaultPublicDir string
+	AppPort   string
+	PublicDir string
 }
-
-const DefaultPublicDir = "src/web/public"
 
 // generateServerFromEmbeddedMarkdown creates the external server go file from the embedded markdown
 // It never overwrites an existing file. If template processing fails, logs to Logger and uses raw markdown.
@@ -36,8 +34,8 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 	}
 
 	data := serverTemplateData{
-		AppPort:          h.AppPort,
-		DefaultPublicDir: DefaultPublicDir,
+		AppPort:   h.AppPort,
+		PublicDir: h.PublicDir,
 	}
 
 	// read embedded markdown
