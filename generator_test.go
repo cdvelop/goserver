@@ -105,18 +105,3 @@ func TestGenerateDoesNotOverwrite(t *testing.T) {
 		t.Fatalf("file was overwritten, expected original content")
 	}
 }
-
-func TestExtractConcatenation(t *testing.T) {
-	// Use a dummy handler; paths don't matter for this test
-	h := newTestHandler(t, "src", "deploy", t.TempDir())
-
-	md := "Some text\n```go\npackage main\n\nfunc A(){}\n```\nMore\n```go\nfunc B(){}\n```\n"
-	out := h.extractGoCodeFromMarkdown(md)
-	if !strings.Contains(out, "func A()") || !strings.Contains(out, "func B()") {
-		t.Fatalf("extraction failed, got: %s", out)
-	}
-	// Ensure both blocks concatenated
-	if strings.Count(out, "func") < 2 {
-		t.Fatalf("expected both functions present, got: %s", out)
-	}
-}

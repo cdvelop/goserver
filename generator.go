@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"regexp"
-	"strings"
 	"text/template"
+
+	"github.com/cdvelop/mdgo"
 )
 
 //go:embed templates/*
@@ -54,19 +54,26 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 		processed = embeddedContent
 	}
 
-	code := h.extractGoCodeFromMarkdown(processed)
-	if code == "" {
-		return fmt.Errorf("no go code blocks found in embedded server definition")
+	// Use mdgo to extract Go code from markdown
+	writer := func(name string, data []byte) error {
+		if err := os.MkdirAll(path.Dir(name), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(name, data, 0o644)
 	}
 
-	// Ensure target directory exists by using the directory of the target path
-	targetDir := path.Dir(targetPath)
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return fmt.Errorf("creating source directory '%s': %w", targetDir, err)
+	// mdgo needs the full destination path
+	destDir := path.Join(h.AppRootDir, h.SourceDir)
+	m := mdgo.New(h.AppRootDir, destDir, writer).
+		InputByte([]byte(processed))
+
+	if h.Logger != nil {
+		m.SetLogger(h.Logger)
 	}
 
-	if err := os.WriteFile(targetPath, []byte(code), 0644); err != nil {
-		return fmt.Errorf("writing server file: %w", err)
+	// Extract to the main file name (mdgo will handle the path joining)
+	if err := m.Extract(h.mainFileExternalServer); err != nil {
+		return fmt.Errorf("extracting go code from markdown: %w", err)
 	}
 
 	if h.Logger != nil {
@@ -91,18 +98,4 @@ func (h *ServerHandler) processTemplate(markdown string, data serverTemplateData
 		return markdown, err
 	}
 	return buf.String(), nil
-}
-
-func (h *ServerHandler) extractGoCodeFromMarkdown(markdown string) string {
-	// pattern to capture ```go ... ``` blocks, DOTALL mode
-	pattern := "(?s)```go\\n(.*?)```"
-	re := regexp.MustCompile(pattern)
-	matches := re.FindAllStringSubmatch(markdown, -1)
-	var blocks []string
-	for _, m := range matches {
-		if len(m) > 1 {
-			blocks = append(blocks, strings.TrimSpace(m[1]))
-		}
-	}
-	return strings.Join(blocks, "\n\n")
 }
