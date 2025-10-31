@@ -8,4 +8,4 @@ require (
 	github.com/cdvelop/mdgo v0.0.3
 )
 
-require github.com/cdvelop/tinystring v0.10.0 // indirect
+require github.com/cdvelop/tinystring v0.10.1 // indirect
