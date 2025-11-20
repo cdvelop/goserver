@@ -22,6 +22,7 @@ type Config struct {
 	SourceDir                   string               // directory location of main.go e.g., src/cmd/appserver (relative to AppRootDir)
 	OutputDir                   string               // compilation and execution directory e.g., deploy/appserver (relative to AppRootDir)
 	PublicDir                   string               // default public dir for generated server (e.g., src/web/public)
+	MainInputFile               string               // main input file name (default: "main.go", can be "server.go", etc.)
 	ArgumentsForCompilingServer func() []string      // e.g., []string{"-X 'main.version=v1.0.0'"}
 	ArgumentsToRunServer        func() []string      // e.g., []string{"dev"}
 	AppPort                     string               // e.g., 8080
@@ -32,11 +33,12 @@ type Config struct {
 // NewConfig provides a default configuration.
 func NewConfig() *Config {
 	return &Config{
-		AppRootDir: ".",
-		SourceDir:  "src/cmd/appserver",
-		OutputDir:  "deploy/appserver",
-		PublicDir:  "src/web/public",
-		AppPort:    "8080",
+		AppRootDir:    ".",
+		SourceDir:     "src/cmd/appserver",
+		OutputDir:     "deploy/appserver",
+		PublicDir:     "src/web/public",
+		MainInputFile: "main.go", // Default convention
+		AppPort:       "8080",
 		Logger: func(message ...any) {
 			// Silent by default
 		},
@@ -64,6 +66,9 @@ func New(c *Config) *ServerHandler {
 		}
 		if c.PublicDir == "" {
 			c.PublicDir = dc.PublicDir
+		}
+		if c.MainInputFile == "" {
+			c.MainInputFile = dc.MainInputFile
 		}
 		if c.AppPort == "" {
 			c.AppPort = dc.AppPort
@@ -94,7 +99,7 @@ func New(c *Config) *ServerHandler {
 
 	sh := &ServerHandler{
 		Config:                 c,
-		mainFileExternalServer: "main.go", // Convention: main file is always main.go
+		mainFileExternalServer: c.MainInputFile, // Use configured file name
 	}
 
 	sh.goCompiler = gobuild.New(&gobuild.Config{
