@@ -6,6 +6,8 @@ You can modify this server according to your needs.
 ## Server Code
 
 ```go
+//go:build !wasm
+
 package main
 
 import (
