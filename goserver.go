@@ -102,10 +102,16 @@ func New(c *Config) *ServerHandler {
 		mainFileExternalServer: c.MainInputFile, // Use configured file name
 	}
 
+	// Extract output name from input file (e.g., "server.go" -> "server")
+	outName := sh.mainFileExternalServer
+	if ext := filepath.Ext(outName); ext != "" {
+		outName = outName[:len(outName)-len(ext)]
+	}
+
 	sh.goCompiler = gobuild.New(&gobuild.Config{
 		Command:                   "go",
 		MainInputFileRelativePath: filepath.Join(c.AppRootDir, c.SourceDir, sh.mainFileExternalServer),
-		OutName:                   "main", // Convention: output is always main
+		OutName:                   outName, // Use input file name without extension
 		Extension:                 exe_ext,
 		CompilingArguments:        c.ArgumentsForCompilingServer,
 		OutFolderRelativePath:     filepath.Join(c.AppRootDir, c.OutputDir),
