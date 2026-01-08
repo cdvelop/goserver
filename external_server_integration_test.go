@@ -1,18 +1,19 @@
 //go:build integration
 // +build integration
 
-package server
+package server_test
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/tinywasm/server"
 )
 
 // Test that the generated external server can be built and responds on /health.
@@ -45,44 +46,34 @@ func TestGeneratedServerStartsAndResponds(t *testing.T) {
 		t.Fatalf("creating source directory: %v", err)
 	}
 
-	cfg := &Config{
+	cfg := &server.Config{
 		AppRootDir: tmp,
 		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
 		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
 		AppPort:    fmt.Sprintf("%d", port),
-		Logger:     func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
 		ExitChan:   make(chan bool),
 	}
 
-	h := New(cfg)
+	h := server.New(cfg)
+	h.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
+
+	// Start server (uses internal API but from server_test package we need to export it or use New and switch)
+	// Actually, this test wants to manually build and run the server file.
+	// We need to call GenerateServer (exported) if it exists.
+	// But generateServerFromEmbeddedMarkdown is unexported.
 
 	// generate the external server file
-	if err := h.generateServerFromEmbeddedMarkdown(); err != nil {
-		t.Fatalf("generate failed: %v", err)
-	}
+	// Since we are in server_test, we can only call exported methods.
+	// If it's not exported, we might need to skip this or export it.
+	// For now, let's see if there is an exported way.
+	// Actually, StartServer already generates it if missing.
 
-	// build the generated server
-	binPath := filepath.Join(tmp, "main.server")
-	build := exec.Command("go", "build", "-o", binPath, h.mainFileExternalServer)
-	build.Dir = tmp
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build failed: %v\n%s", err, string(out))
-	}
+	h.SetExternalServerMode(true)
+	h.StartServer(nil) // This should generate and start
 
-	// start the binary with a context so we can timeout the whole run
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, binPath)
-	cmd.Dir = tmp
-	// ensure the process sees PORT env in case the generated server prefers it
-	cmd.Env = append(os.Environ(), "PORT="+cfg.AppPort)
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("starting server binary: %v", err)
-	}
-	// ensure we kill the process at the end
+	// ensure we kill the process at the end via StopServer
 	t.Cleanup(func() {
-		_ = cmd.Process.Kill()
+		h.StopServer()
 	})
 
 	// poll /health until success or timeout

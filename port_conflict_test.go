@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package server
+package server_test
 
 import (
 	"fmt"
@@ -36,6 +36,7 @@ func TestPortConflictCleanup(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
+	portStr := fmt.Sprintf("%d", port)
 
 	// Create a go.mod file
 	gomod := `module temp
@@ -92,7 +93,7 @@ func main() {
 		AppRootDir: tmp,
 		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
 		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
-		AppPort:    fmt.Sprintf("%d", port),
+		AppPort:    portStr,
 		ExitChan:   make(chan bool),
 	}
 
@@ -101,12 +102,8 @@ func main() {
 
 	// Test 1: Start server normally
 	t.Log("🚀 Starting first server instance...")
-	err = h.startServer()
-	if err != nil {
-		t.Logf("❌ First server failed as expected due to occupied port: %v", err)
-	} else {
-		t.Log("✅ First server started successfully")
-	}
+	h.SetExternalServerMode(true) // Ensure it uses gorun
+	h.StartServer(nil)
 
 	time.Sleep(1 * time.Second)
 
@@ -114,54 +111,49 @@ func main() {
 	t.Log("🚀 Starting second server instance (this should conflict)...")
 
 	// Create second handler with same port
-	cfg2 := &Config{
+	cfg2 := &server.Config{
 		AppRootDir: tmp,
 		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
 		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
-		AppPort:    fmt.Sprintf("%d", port),
-		Logger:     func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
+		AppPort:    portStr,
 		ExitChan:   make(chan bool),
 	}
 
-	h2 := New(cfg2)
+	h2 := server.New(cfg2)
+	h2.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
+	h2.SetExternalServerMode(true)
 
-	// This should fail with "address already in use"
-	err = h2.startServer()
-	if err != nil {
-		t.Logf("✅ Second server failed as expected: %v", err)
-	} else {
-		t.Log("❌ Second server started unexpectedly (this should have failed)")
-	}
+	// This should log an error because port is occupied
+	h2.StartServer(nil)
 
 	// Now close the listener to free the port
 	ln.Close()
 
 	// Test 3: Try restart - this should work now that the port is free
 	t.Log("🔄 Attempting restart on first server...")
-	err = h.RestartServer()
+	err = h.StopServer() // New StopServer method
 	if err != nil {
-		t.Logf("❌ RestartServer failed: %v", err)
-	} else {
-		t.Log("✅ Restart completed successfully")
+		t.Logf("StopServer reported error (expected if it failed to start fully): %v", err)
+	}
 
-		// Verify the server is actually running
-		time.Sleep(1 * time.Second)
-		client := &http.Client{Timeout: 2 * time.Second}
-		url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
-		if resp, httpErr := client.Get(url); httpErr == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 200 {
-				t.Log("✅ Restarted server is responding correctly")
-			} else {
-				t.Logf("❌ Restarted server wrong status: %d", resp.StatusCode)
-			}
+	h.StartServer(nil)
+
+	// Verify the server is actually running
+	time.Sleep(1 * time.Second)
+	client := &http.Client{Timeout: 2 * time.Second}
+	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
+	if resp, httpErr := client.Get(url); httpErr == nil {
+		resp.Body.Close()
+		if resp.StatusCode == 200 {
+			t.Log("✅ Restarted server is responding correctly")
 		} else {
-			t.Logf("❌ Restarted server not responding: %v", httpErr)
+			t.Logf("❌ Restarted server wrong status: %d", resp.StatusCode)
 		}
+	} else {
+		t.Logf("❌ Restarted server not responding: %v", httpErr)
 	}
 
 	// Cleanup
-	cfg.ExitChan <- true
-	cfg2.ExitChan <- true
-	time.Sleep(1 * time.Second)
+	h.StopServer()
+	h2.StopServer()
 }

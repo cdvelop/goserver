@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package server
+package server_test
 
 import (
 	"bytes"
@@ -11,11 +11,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	gs "github.com/tinywasm/server"
+	"github.com/tinywasm/server"
 )
 
 // Integration test: black-box verification that StartServer generates the external
@@ -50,17 +51,27 @@ func TestStartServerRunsGeneratedServerAndResponds(t *testing.T) {
 		t.Fatalf("writing index.html: %v", err)
 	}
 
-	sourceDir := "src/app"
-	outputDir := "deploy"
-	fullSourcePath := filepath.Join(tmp, sourceDir)
-	if err := os.MkdirAll(fullSourcePath, 0755); err != nil {
-		t.Fatalf("creating source dir: %v", err)
+	sourceDir := filepath.Join(tmp, "src", "app")
+	outputDir := filepath.Join(tmp, "deploy")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("creating source directory: %v", err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatalf("creating output directory: %v", err)
 	}
 
-	cfg := &gs.Config{
+	// Create a go.mod file
+	gomod := `module temp
+go 1.20
+`
+	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), []byte(gomod), 0644); err != nil {
+		t.Fatalf("creating go.mod: %v", err)
+	}
+
+	cfg := &server.Config{
 		AppRootDir: tmp,
-		SourceDir:  sourceDir,
-		OutputDir:  outputDir,
+		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
+		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
 		AppPort:    fmt.Sprintf("%d", port),
 		ExitChan:   make(chan bool, 1),
 		ArgumentsToRunServer: func() []string {
@@ -69,12 +80,12 @@ func TestStartServerRunsGeneratedServerAndResponds(t *testing.T) {
 		},
 	}
 
-	h := gs.New(cfg)
+	h := server.New(cfg)
 	h.SetLog(logger)
 	h.SetExternalServerMode(true)
 
 	// Ensure external file absent
-	target := h.MainInputFileRelativePath()
+	target := filepath.Join(tmp, h.MainInputFileRelativePath())
 	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("expected no external server file at %s", target)
 	}
@@ -120,11 +131,8 @@ func TestStartServerRunsGeneratedServerAndResponds(t *testing.T) {
 					t.Fatalf("error requesting root file: %v", err2)
 				}
 
-				// success: signal server to exit via ExitChan
-				select {
-				case cfg.ExitChan <- true:
-				default:
-				}
+				// success: signal server to exit via StopServer
+				h.StopServer()
 				return
 			}
 		}

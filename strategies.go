@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -115,6 +115,10 @@ func (s *inMemoryStrategy) Stop() error {
 	defer cancel()
 
 	err := s.server.Shutdown(ctx)
+	if err != nil {
+		s.handler.Logger("In-Memory Server shutdown error, forcing close:", err)
+		s.server.Close()
+	}
 	s.running = false
 	s.server = nil
 	s.handler.Logger("In-Memory Server stopped")
@@ -127,9 +131,26 @@ func (s *inMemoryStrategy) Restart() error {
 	if err != nil {
 		return err
 	}
+
+	// Wait for port to be released (up to 2 seconds)
+	waitForPortFree(s.handler.AppPort)
+
 	// Note: We run Start in a goroutine because it blocks on ExitChan
 	go s.Start(nil)
 	return nil
+}
+
+func waitForPortFree(port string) {
+	addr := ":" + port
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			ln.Close()
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func (s *inMemoryStrategy) HandleFileEvent(fileName, extension, filePath, event string) error {
@@ -182,7 +203,7 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 		ExitChan:             h.ExitChan,
 		Logger:               h.Logger,
 		KillAllOnStop:        true,
-		DisableGlobalCleanup: h.DisableGlobalCleanup || TestMode,
+		DisableGlobalCleanup: h.Config.DisableGlobalCleanup,
 		WorkingDir:           filepath.Join(h.AppRootDir, h.OutputDir),
 	})
 
@@ -234,26 +255,13 @@ func (s *externalStrategy) Stop() error {
 }
 
 func (s *externalStrategy) Restart() error {
-	ignoreError := []string{
-		"signal: killed",
-		"signal: interrupt",
-	}
-
-	err := s.startServer()
+	s.handler.Logger("Restarting External Server...")
+	err := s.Stop()
 	if err != nil {
-		shouldIgnore := false
-		for _, v := range ignoreError {
-			if strings.Contains(err.Error(), v) {
-				shouldIgnore = true
-				break
-			}
-		}
-		if !shouldIgnore {
-			s.handler.Logger(err)
-		}
 		return err
 	}
-	return nil
+	waitForPortFree(s.handler.AppPort) // Ensure port is free
+	return s.Start(nil)
 }
 
 func (s *externalStrategy) HandleFileEvent(fileName, extension, filePath, event string) error {

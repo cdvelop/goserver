@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package server
+package server_test
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/tinywasm/server"
+	"github.com/tinywasm/server"
 )
 
 // TestRestartCleanup tests that RestartServer properly cleans up processes
@@ -116,7 +116,7 @@ func main() {
 		t.Fatalf("creating main.go: %v", err)
 	}
 
-	serverConfig := &Config{
+	serverConfig := &server.Config{
 		AppRootDir: tmp,
 		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
 		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
@@ -124,15 +124,13 @@ func main() {
 		ExitChan:   make(chan bool),
 	}
 
-	h := New(serverConfig)
+	h := server.New(serverConfig)
 	h.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
 
 	// Test 1: Initial start
 	t.Log("🚀 Starting external server (v1)...")
-	err = h.startServer()
-	if err != nil {
-		t.Fatalf("startServer failed: %v", err)
-	}
+	h.SetExternalServerMode(true) // Ensure it uses gorun
+	h.StartServer(nil)
 
 	// Wait and verify server responds
 	client := &http.Client{Timeout: 2 * time.Second}
@@ -253,6 +251,6 @@ func main() {
 	t.Log("✅ Server restart successful - now running v2")
 
 	// Cleanup
-	serverConfig.ExitChan <- true
+	h.StopServer()
 	time.Sleep(1 * time.Second)
 }
