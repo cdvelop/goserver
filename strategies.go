@@ -122,10 +122,13 @@ func (s *inMemoryStrategy) Stop() error {
 }
 
 func (s *inMemoryStrategy) Restart() error {
-	// For in-memory, restart isn't typically needed unless config changes,
-	// but we can implement it as Stop + Start.
-	// Note: Start requires WaitGroup, which complicates direct restart here if we strictly follow interface.
-	// For now, we'll just Log. In-memory usually doesn't "restart" on file changes in the same way.
+	s.handler.Logger("Restarting In-Memory Server...")
+	err := s.Stop()
+	if err != nil {
+		return err
+	}
+	// Note: We run Start in a goroutine because it blocks on ExitChan
+	go s.Start(nil)
 	return nil
 }
 
@@ -223,31 +226,10 @@ func (s *externalStrategy) startServer() error {
 }
 
 func (s *externalStrategy) Stop() error {
-	// gorun handles kill on stop/exit via ExitChan, but if we need explicit stop:
-	// For now, we assume the system handles it via the ExitChan in ServerHandler or similar.
-	// But to strictly implement Stop for switching strategies:
 	if s.goRun != nil {
-		// gorun doesn't expose a direct Stop method if not waiting on ExitChan?
-		// We might need to send to ExitChan provided to gorun.
-		// However, s.handler.ExitChan is shared.
-		// Let's assume for this refactor we might need to manually kill if switching.
-		// But gorun.New took ExitChan.
+		s.handler.Logger("Stopping external server...")
+		return s.goRun.StopProgramAndCleanup(true)
 	}
-	// Important: If we are switching strategies, we MUST kill the external process.
-	// Since gorun logic listens on ExitChan, we might be able to leverage that OR
-	// we rely on the fact that `gorun` kills process when the struct is discarded? No.
-	// We need to implement a way to stop it.
-	// Looking at gorun source (assumed), it likely listens to ExitChan.
-	// If we repurpose ExitChan, we stop everything.
-	// We might need to send a signal specifically to this runner.
-	// Let's look at `gorun` interface if possible.
-	// For now, I'll assumme we can't easily "Stop" it without `ExitChan` which stops app.
-	// Wait, `gorun` usually runs until `ExitChan` receives?
-	// If we want to switch modes at runtime, we need to stop the old one.
-
-	// Strategy: Trigger a restart/stop on the runner if possible.
-	// I'll assume for now we might need to rely on OS kill if gorun doesn't export Stop.
-	// But let's look at the previous `goserver.go`... it passed `c.ExitChan`.
 	return nil
 }
 
