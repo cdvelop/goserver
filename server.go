@@ -5,6 +5,10 @@ import (
 	"path/filepath"
 )
 
+// TestMode is a global flag to indicate the server is running in a test environment.
+// This is used to disable aggressive cleanups and other disruptive behaviors.
+var TestMode bool
+
 type ServerHandler struct {
 	*Config
 	mainFileExternalServer string // eg: main.server.go
@@ -24,6 +28,7 @@ type Config struct {
 	ArgumentsToRunServer        func() []string        // e.g., []string{"dev"}
 	AppPort                     string                 // e.g., 8080
 	Routes                      []func(*http.ServeMux) // Functions to register routes on the HTTP server
+	DisableGlobalCleanup        bool                   // If true, disables global cleanup in gorun during restarts
 	ExitChan                    chan bool              // Global channel to signal shutdown
 }
 

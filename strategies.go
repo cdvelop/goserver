@@ -174,12 +174,13 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 	})
 
 	runner := gorun.New(&gorun.Config{
-		ExecProgramPath: "./" + compiler.MainOutputFileNameWithExtension(),
-		RunArguments:    h.ArgumentsToRunServer,
-		ExitChan:        h.ExitChan,
-		Logger:          h.Logger,
-		KillAllOnStop:   true,
-		WorkingDir:      filepath.Join(h.AppRootDir, h.OutputDir),
+		ExecProgramPath:      "./" + compiler.MainOutputFileNameWithExtension(),
+		RunArguments:         h.ArgumentsToRunServer,
+		ExitChan:             h.ExitChan,
+		Logger:               h.Logger,
+		KillAllOnStop:        true,
+		DisableGlobalCleanup: h.DisableGlobalCleanup || TestMode,
+		WorkingDir:           filepath.Join(h.AppRootDir, h.OutputDir),
 	})
 
 	return &externalStrategy{
