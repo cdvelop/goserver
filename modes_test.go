@@ -1,10 +1,13 @@
 package server
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 type mockStore struct {
@@ -14,36 +17,60 @@ type mockStore struct {
 func (m *mockStore) Get(key string) (string, error) { return m.data[key], nil }
 func (m *mockStore) Set(key, value string) error    { m.data[key] = value; return nil }
 
-func TestServerModeHandler_Label(t *testing.T) {
+func TestServerHandler_Value(t *testing.T) {
 	tmpData := t.TempDir()
 	cfg := NewConfig()
 	cfg.AppRootDir = tmpData
 	cfg.SourceDir = "src"
 	h := New(cfg)
-	db := &mockStore{data: make(map[string]string)}
-	smh := NewServerModeHandler(h, db, nil)
 
-	// Case 1: Internal Mode
-	if label := smh.Label(); label != "SERVER → Switch to External" {
-		t.Errorf("expected internal label, got: %s", label)
+	// Case 1: Default (Internal + In-Memory)
+	if got := h.Value(); got != "Execution External:F, Build OnDisk:F" {
+		t.Errorf("default Value() = %q", got)
 	}
 
-	// Case 2: External Mode (unmodified)
-	db.Set(StoreKeyExternalServer, "true")
-	if err := h.SetExternalServerMode(true); err != nil {
-		t.Fatalf("failed to set external mode: %v", err)
+	// Case 2: Modified state
+	h.executionInternal = false
+	h.compilationOnDisk = true
+	if got := h.Value(); got != "Execution External:T, Build OnDisk:T" {
+		t.Errorf("modified Value() = %q", got)
 	}
-	if label := smh.Label(); label != "SERVER → Switch to Internal" {
-		t.Errorf("expected external unmodified label, got: %s", label)
+}
+
+func TestServerHandler_Change(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantExec bool // true = internal, false = external
+		wantDisk bool
+	}{
+		{"both T", "Execution External:T, Build OnDisk:T", false, true},
+		{"both F", "Execution External:F, Build OnDisk:F", true, false},
+		{"lowercase", "Execution External:t, Build OnDisk:f", false, false},
+		{"full words", "Execution External:true, Build OnDisk:false", false, false},
+		{"uppercase words", "Execution External:TRUE, Build OnDisk:FALSE", false, false},
 	}
 
-	// Case 3: External Mode (modified)
-	targetPath := filepath.Join(tmpData, "src", cfg.MainInputFile)
-	if err := os.WriteFile(targetPath, []byte("package main\n\nfunc main() { /* customized */ }\n"), 0644); err != nil {
-		t.Fatalf("failed to modify server file: %v", err)
-	}
-	if label := smh.Label(); label != "SERVER: External (customized)" {
-		t.Errorf("expected external customized label, got: %s", label)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fresh handler for each subtest to avoid race conditions
+			tmpData := t.TempDir()
+			cfg := NewConfig()
+			cfg.AppRootDir = tmpData
+			cfg.SourceDir = "src"
+			h := New(cfg)
+			db := &mockStore{data: make(map[string]string)}
+			h.Store = db
+
+			h.Change(tt.input)
+
+			if h.executionInternal != tt.wantExec {
+				t.Errorf("executionInternal = %v, want %v", h.executionInternal, tt.wantExec)
+			}
+			if h.compilationOnDisk != tt.wantDisk {
+				t.Errorf("compilationOnDisk = %v, want %v", h.compilationOnDisk, tt.wantDisk)
+			}
+		})
 	}
 }
 
@@ -139,5 +166,87 @@ func TestSetCompilationOnDisk(t *testing.T) {
 	h.SetCompilationOnDisk(true)
 	if !h.compilationOnDisk {
 		t.Fatal("expected compilationOnDisk to be true after setting")
+	}
+}
+
+func TestModeSwitchWhileRunning_DoesNotHang(t *testing.T) {
+	tmpData := t.TempDir()
+	cfg := NewConfig()
+	cfg.AppRootDir = tmpData
+	cfg.SourceDir = "src"
+	cfg.OutputDir = "bin"
+	cfg.AppPort = "18080" // Use non-standard port to avoid conflicts
+	cfg.ExitChan = make(chan bool)
+	cfg.DisableGlobalCleanup = true
+
+	var logs []string
+	var logsMu sync.Mutex
+	cfg.Logger = func(msgs ...any) {
+		logsMu.Lock()
+		defer logsMu.Unlock()
+		for _, m := range msgs {
+			logs = append(logs, fmt.Sprintf("%v", m))
+		}
+	}
+
+	h := New(cfg)
+	db := &mockStore{data: make(map[string]string)}
+	h.Store = db
+
+	// Start the internal server in a goroutine (like app does)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	serverStarted := make(chan struct{})
+	go func() {
+		close(serverStarted)
+		h.StartServer(&wg)
+	}()
+	<-serverStarted
+
+	// Give server time to start
+	time.Sleep(200 * time.Millisecond)
+
+	// Call Change() to switch to external mode - this is what app does via TUI
+	done := make(chan struct{})
+	go func() {
+		h.Change("Execution External:T, Build OnDisk:F")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Change completed
+		t.Log("Change() completed")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Change() hung - mode switch blocked")
+	}
+
+	// Check logs for errors
+	logsMu.Lock()
+	for _, log := range logs {
+		t.Logf("LOG: %s", log)
+	}
+	logsMu.Unlock()
+
+	// Verify mode changed
+	if h.executionInternal {
+		t.Error("expected executionInternal to be false after Change")
+	}
+
+	// Cleanup - signal exit
+	close(cfg.ExitChan)
+
+	// Wait for server goroutine to finish (with timeout)
+	waitDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(waitDone)
+	}()
+
+	select {
+	case <-waitDone:
+		t.Log("Server shutdown cleanly")
+	case <-time.After(3 * time.Second):
+		t.Log("Server shutdown timed out (expected in some cases)")
 	}
 }

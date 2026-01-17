@@ -34,11 +34,12 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 	}
 
 	cfg := &Config{
-		AppRootDir: tmp,
-		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
-		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
-		AppPort:    "0",
-		ExitChan:   make(chan bool, 1),
+		AppRootDir:           tmp,
+		SourceDir:            filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
+		OutputDir:            filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
+		AppPort:              "0",
+		ExitChan:             make(chan bool, 1),
+		DisableGlobalCleanup: true, // Prevent interference with other tests
 	}
 
 	serverFile := filepath.Join(sourceDir, "main.go")

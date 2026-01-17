@@ -5,11 +5,36 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/tinywasm/fmt"
 )
+
+// Store defines the minimal interface for persistent storage
+type Store interface {
+	Get(key string) (string, error)
+	Set(key, value string) error
+}
+
+// UI defines the minimal interface for UI interaction
+type UI interface {
+	RefreshUI()
+}
+
+const StoreKeyExternalServer = "server_external_mode"
+const StoreKeyCompilationOnDisk = "server_compilation_ondisk"
 
 // TestMode is a global flag to indicate the server is running in a test environment.
 // This is used to disable aggressive cleanups and other disruptive behaviors.
 var TestMode bool
+
+type noopStore struct{}
+
+func (noopStore) Get(string) (string, error) { return "", nil }
+func (noopStore) Set(string, string) error   { return nil }
+
+type noopUI struct{}
+
+func (noopUI) RefreshUI() {}
 
 type ServerHandler struct {
 	*Config
@@ -33,6 +58,8 @@ type Config struct {
 	DisableGlobalCleanup        bool                   // If true, disables global cleanup in gorun during restarts
 	Logger                      func(message ...any)   // Logger function
 	ExitChan                    chan bool              // Global channel to signal shutdown
+	Store                       Store                  // Persistent storage for modes
+	UI                          UI                     // UI for refresh notifications
 }
 
 // NewConfig provides a default configuration.
@@ -94,12 +121,81 @@ func New(c *Config) *ServerHandler {
 		onLog:                  c.Logger,
 	}
 
+	if sh.Store == nil {
+		sh.Store = noopStore{}
+	}
+	if sh.UI == nil {
+		sh.UI = noopUI{}
+	}
+
 	// Default to Internal Execution Mode
 	sh.executionInternal = true
 	sh.strategy = newInternalStrategy(sh)
-	// sh.log("Server initialized in Internal Mode (default)")
+
+	// Load persisted states
+	if val, err := sh.Store.Get(StoreKeyExternalServer); err == nil && val == "true" {
+		sh.executionInternal = false
+		sh.strategy = newExternalStrategy(sh)
+	}
+
+	if val, err := sh.Store.Get(StoreKeyCompilationOnDisk); err == nil && val == "true" {
+		sh.compilationOnDisk = true
+	}
 
 	return sh
+}
+
+// Label implements HandlerEdit.Label
+func (h *ServerHandler) Label() string {
+	return "Server Modes"
+}
+
+// Value implements HandlerEdit.Value
+func (h *ServerHandler) Value() string {
+	exec := "F"
+	if !h.executionInternal {
+		exec = "T"
+	}
+	build := "F"
+	if h.compilationOnDisk {
+		build = "T"
+	}
+	return "Execution External:" + exec + ", Build OnDisk:" + build
+}
+
+// Change implements HandlerEdit.Change
+func (h *ServerHandler) Change(newValue string) {
+	pairs := fmt.Convert(newValue).Split(",")
+
+	for _, pair := range pairs {
+		// e.g., pair = "Execution External:T" or " Build OnDisk:F"
+		s := fmt.Convert(pair).TrimSpace().String()
+		pos := fmt.Index(s, ":")
+		if pos == -1 {
+			continue
+		}
+
+		key := fmt.Convert(s[:pos]).TrimSpace().String()
+		val := fmt.Convert(s[pos+1:]).TrimSpace().ToLower().String()
+		isTrue := val == "t" || val == "true"
+
+		switch key {
+		case "Execution External":
+			if err := h.SetExternalServerMode(isTrue); err != nil {
+				h.log("Mode change error:", err)
+			}
+		case "Build OnDisk":
+			h.SetCompilationOnDisk(isTrue)
+		}
+	}
+
+	h.RefreshUI()
+}
+
+func (h *ServerHandler) RefreshUI() {
+	if h.UI != nil {
+		h.UI.RefreshUI()
+	}
 }
 
 func (h *ServerHandler) Name() string {
@@ -156,6 +252,8 @@ func (h *ServerHandler) serverFileWasModified() bool {
 // SetCompilationOnDisk sets whether the server artifacts should be written to disk.
 func (h *ServerHandler) SetCompilationOnDisk(onDisk bool) {
 	h.compilationOnDisk = onDisk
+	_ = h.Store.Set(StoreKeyCompilationOnDisk, map[bool]string{true: "true", false: "false"}[onDisk])
+
 	// If we are in external mode, it will compile to disk on Start/Restart
 	if !h.executionInternal {
 		h.log("Server Compilation mode set to:", map[bool]string{true: "OnDisk", false: "InMemory"}[onDisk])
@@ -190,6 +288,7 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 			if err := h.strategy.Start(nil); err != nil {
 				return err
 			}
+			_ = h.Store.Set(StoreKeyExternalServer, "true")
 		}
 	} else {
 		if !h.executionInternal {
@@ -210,6 +309,7 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 			h.strategy = newInternalStrategy(h)
 
 			go h.strategy.Start(nil)
+			_ = h.Store.Set(StoreKeyExternalServer, "false")
 		}
 	}
 	return nil
