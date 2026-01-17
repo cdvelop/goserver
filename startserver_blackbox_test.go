@@ -39,27 +39,16 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 		t.Fatalf("expected no external server file at %s", target)
 	}
 
-	// Verify we are in InMemory mode
-	if !h.inMemory {
-		t.Fatal("Expected In-Memory mode initially")
+	// Verify we are in Internal mode
+	if !h.executionInternal {
+		t.Fatal("Expected Internal mode initially")
 	}
 
-	// Create a channel for progress updates (optional, but testing API)
-	progress := make(chan string, 10)
-
-	// Call CreateTemplateServer using a background goroutine or check result.
+	// Call CreateTemplateServer.
 	// Since CreateTemplateServer tries to compile, and we might not have a full Go env for the generated code
 	// (depending on dependencies), it might return an error.
 	// We primarily care that it generated the file.
-	err := h.CreateTemplateServer(progress)
-
-	// Close progress channel to read all messages
-	close(progress)
-
-	// Log progress for debugging
-	for msg := range progress {
-		t.Log("Progress:", msg)
-	}
+	err := h.CreateTemplateServer()
 
 	if err != nil {
 		t.Logf("CreateTemplateServer returned error (expected in restricted test env if compile fails): %v", err)
@@ -75,17 +64,17 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	if !strings.Contains(out, "generate server from markdown") && !strings.Contains(out, "Generating server files") {
 		// CreateTemplateServer might log to progress channel instead of h.Logger for some steps
 		// But generateServerFromEmbeddedMarkdown uses h.Logger if set.
-		// And we also verify h.inMemory is now false (logic switched strategy before Compile)
+		// And we also verify h.executionInternal is now false (logic switched strategy before Compile)
 		// Wait, if Compile failed inside startServer, does it stay in ExternalStrategy?
 		// CreateTemplateServer:
 		// 1. Stop InMemory
 		// 2. Generate
-		// 3. Switch h.inMemory=false, h.strategy=newExternal
+		// 3. Switch h.executionInternal=false, h.strategy=newExternal
 		// 4. h.strategy.Start() -> Compile -> Error
-		// So h.inMemory should be false even if Start fails.
+		// So h.executionInternal should be false even if Start fails.
 	}
 
-	if h.inMemory {
-		t.Error("Expected to be in External mode logic (h.inMemory = false) even if compilation failed")
+	if h.executionInternal {
+		t.Error("Expected to be in External mode logic (h.executionInternal = false) even if compilation failed")
 	}
 }

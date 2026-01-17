@@ -129,7 +129,9 @@ func main() {
 
 	// Test 1: Initial start
 	t.Log("🚀 Starting external server (v1)...")
-	h.SetExternalServerMode(true) // Ensure it uses gorun
+	if err := h.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
+	} // Ensure it uses gorun
 	h.StartServer(nil)
 
 	// Wait and verify server responds

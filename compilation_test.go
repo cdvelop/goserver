@@ -65,7 +65,9 @@ func main() {
 
 	handler := New(cfg)
 	handler.SetLog(logger)
-	handler.SetExternalServerMode(true)
+	if err := handler.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
+	}
 
 	// Start the server for the first time
 	var wg sync.WaitGroup
@@ -185,7 +187,9 @@ func main() {
 
 	handler := New(cfg)
 	handler.SetLog(logger)
-	handler.SetExternalServerMode(true)
+	if err := handler.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
+	}
 
 	// Start the server first
 	var wg sync.WaitGroup
@@ -284,7 +288,9 @@ func main() {
 
 	handler := New(cfg)
 	handler.SetLog(logger)
-	handler.SetExternalServerMode(true)
+	if err := handler.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
+	}
 
 	// Create another Go file (shared module)
 	sharedFile := filepath.Join(tmp, "utils.go")

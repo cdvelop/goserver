@@ -66,7 +66,9 @@ func main() {
 
 	handler := New(cfg)
 	handler.SetLog(logger)
-	handler.SetExternalServerMode(true)
+	if err := handler.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
+	}
 
 	// Start the server so there is a running process to stop on restart
 	var wg sync.WaitGroup

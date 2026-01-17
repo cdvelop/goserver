@@ -102,7 +102,9 @@ func main() {
 
 	// Test 1: Start server normally
 	t.Log("🚀 Starting first server instance...")
-	h.SetExternalServerMode(true) // Ensure it uses gorun
+	if err := h.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
+	} // Ensure it uses gorun
 	h.StartServer(nil)
 
 	time.Sleep(1 * time.Second)
@@ -121,7 +123,9 @@ func main() {
 
 	h2 := server.New(cfg2)
 	h2.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
-	h2.SetExternalServerMode(true)
+	if err := h2.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
+	}
 
 	// This should log an error because port is occupied
 	h2.StartServer(nil)

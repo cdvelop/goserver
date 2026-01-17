@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -72,42 +71,26 @@ go 1.20
 		AppRootDir: tmp,
 		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
 		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
+		PublicDir:  publicDir,
 		AppPort:    fmt.Sprintf("%d", port),
 		ExitChan:   make(chan bool, 1),
-		ArgumentsToRunServer: func() []string {
-			// Pass the public directory to the server as an environment variable
-			return []string{fmt.Sprintf("PUBLIC_DIR=%s", publicDir)}
-		},
 	}
 
 	h := server.New(cfg)
 	h.SetLog(logger)
-	h.SetExternalServerMode(true)
 
-	// Ensure external file absent
+	// Ensure external file absent initially
 	target := filepath.Join(tmp, h.MainInputFileRelativePath())
 	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("expected no external server file at %s", target)
 	}
 
-	// Start server in background
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go h.StartServer(&wg)
-
-	// Wait for StartServer to finish with timeout
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// StartServer returned (expected)
-	case <-time.After(20 * time.Second):
-		t.Fatalf("StartServer did not complete within timeout; logs: %s", logBuf.String())
+	if err := h.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
 	}
+
+	// No need to call StartServer here as SetExternalServerMode(true) already
+	// generates the template and starts the server.
 
 	// Poll /health until we get 200 or timeout
 	client := &http.Client{Timeout: 2 * time.Second}

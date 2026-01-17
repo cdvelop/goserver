@@ -47,7 +47,7 @@ func main() {
 	if *publicDir == "" {
 		*publicDir = os.Getenv("PUBLIC_DIR")
 		if *publicDir == "" {
-			*publicDir = "public"
+			*publicDir = "{{.PublicDir}}"
 		}
 	}
 

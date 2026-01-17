@@ -8,10 +8,11 @@ This README documents only the public API exported by the `goserver` package.
 
 Short summary
  - `server` provides a specialized HTTP server handler for TinyWASM applications.
- - It operates in two modes:
-    1. **In-Memory (Default)**: Runs a lightweight `net/http` server within the application process. Best for development speed and zero-file generation start.
-    2. **External Process (Permanent)**: Generates a standalone main Go file, compiles it, and runs it as a separate process. Best for customization and production-like validation.
- - It seamlessly handles the transition between modes via `CreateTemplateServer`.
+ - It operates in two execution modes:
+    1. **Internal (Default)**: Runs a lightweight `net/http` server within the application process. Best for development speed and zero-file generation start.
+    2. **External**: Generates a standalone main Go file, compiles it, and runs it as a separate process. Best for customization and production-like validation.
+ - It also supports two compilation modes: **In-Memory** (default) and **On-Disk**.
+ - It seamlessly handles the transition between execution modes via `SetExternalServerMode`.
 
 Public API (types and functions)
 
@@ -22,7 +23,7 @@ Public API (types and functions)
 		- `OutputDir string` (Default: `"web"`)
 		- `PublicDir string` (Default: `"web/public"`)
 		- `AppPort string` (Default: `"8080"`)
-		- `Routes []func(mux *http.ServeMux)` — Register HTTP handlers for In-Memory mode.
+		- `Routes []func(mux *http.ServeMux)` — Register HTTP handlers for Internal mode.
 		- `ArgumentsForCompilingServer func() []string`
 		- `ArgumentsToRunServer func() []string`
 		- `Logger func(message ...any)`
@@ -32,20 +33,19 @@ Public API (types and functions)
 
 - type `ServerHandler`
 	- Construct with: `New(c *Config) *ServerHandler`
-	- **Startup Logic**: Automatically detects if a server file exists in `SourceDir`.
-		- If exists: Starts in **External Process** mode.
-		- If missing: Starts in **In-Memory** mode using provided `Routes`.
 	- Exported methods:
 		- `StartServer(wg *sync.WaitGroup)` — Starts the server (async).
-		- `CreateTemplateServer(progress chan<- string) error` — Transitions from In-Memory to External mode. Generates files, compiles, and restarts.
+		- `SetExternalServerMode(external bool) error` — Switches between Internal and External execution modes. When switching to External, it generates files (if missing), compiles, and starts the process.
+		- `CreateTemplateServer() error` — Legacy method specifically for transitioning from Internal to External mode.
+		- `SetCompilationOnDisk(onDisk bool)` — Switches between In-Memory and On-Disk compilation artifacts.
 		- `RestartServer() error` — Restarts the server.
-		- `NewFileEvent(...)` — Handles hot-reloads (recompiles external server or no-op/refresh for in-memory).
+		- `NewFileEvent(...)` — Handles hot-reloads (recompiles external server or no-op/refresh for internal).
 		- `MainInputFileRelativePath() string`
 		- `UnobservedFiles() []string`
 
 Notes and behaviour
-- **Routes Registration**: Use `Config.Routes` to register handlers (e.g., static assets, API endpoints) so they work immediately in In-Memory mode.
-- **Persistence**: Once `CreateTemplateServer` is called (or if files exist), the server remains in "External" mode permanently for that project unless files are deleted.
+- **Routes Registration**: Use `Config.Routes` to register handlers (e.g., static assets, API endpoints) so they work immediately in Internal mode.
+- **Port Management**: When switching modes, the handler automatically waits for the port to be free before starting the new strategy.
 
 Minimal usage example
 
@@ -64,7 +64,7 @@ func main() {
     // Define a route function
     myRoute := func(mux *http.ServeMux) {
         mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-            fmt.Fprint(w, "Hello from In-Memory Server!")
+            fmt.Fprint(w, "Hello from Internal Server!")
         })
     }
 
@@ -82,7 +82,7 @@ func main() {
     wg.Wait()
     
     // To switch to external mode later:
-    // handler.CreateTemplateServer(nil)
+    // handler.SetExternalServerMode(true)
 }
 ```
 

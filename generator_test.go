@@ -73,8 +73,8 @@ func TestGenerateCreatesFile(t *testing.T) {
 		t.Errorf("generated file missing noCache middleware")
 	}
 	// Verify default public dir
-	if !strings.Contains(content, `*publicDir = "public"`) {
-		t.Errorf("generated file missing default public dir assignment")
+	if !strings.Contains(content, `*publicDir = "web/public"`) {
+		t.Errorf("generated file missing substituted PublicDir (web/public)")
 	}
 }
 

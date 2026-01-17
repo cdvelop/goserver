@@ -68,7 +68,9 @@ func TestGeneratedServerStartsAndResponds(t *testing.T) {
 	// For now, let's see if there is an exported way.
 	// Actually, StartServer already generates it if missing.
 
-	h.SetExternalServerMode(true)
+	if err := h.SetExternalServerMode(true); err != nil {
+		t.Fatalf("failed to set external server mode: %v", err)
+	}
 	h.StartServer(nil) // This should generate and start
 
 	// ensure we kill the process at the end via StopServer

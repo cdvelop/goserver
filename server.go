@@ -13,8 +13,8 @@ type ServerHandler struct {
 	*Config
 	mainFileExternalServer string // eg: main.server.go
 	strategy               ServerStrategy
-	inMemory               bool // true if running internal server, false if external process
-	buildOnDisk            bool // true if compilation artifacts should be written to disk
+	executionInternal      bool // true = embedded server (internal), false = external process
+	compilationOnDisk      bool // true = artifacts to disk, false = in-memory
 	log                    func(message ...any)
 }
 
@@ -89,10 +89,10 @@ func New(c *Config) *ServerHandler {
 		mainFileExternalServer: c.MainInputFile, // Use configured file name
 	}
 
-	// Default to In-Memory Strategy (Internal Server)
-	sh.inMemory = true
-	sh.strategy = newInMemoryStrategy(sh)
-	// sh.Logger("Server initialized in In-Memory Mode (default)")
+	// Default to Internal Execution Mode
+	sh.executionInternal = true
+	sh.strategy = newInternalStrategy(sh)
+	// sh.Logger("Server initialized in Internal Mode (default)")
 
 	return sh
 }
@@ -122,7 +122,7 @@ func (h *ServerHandler) SupportedExtensions() []string {
 
 // UnobservedFiles returns the list of files that should not be tracked by file watchers
 func (h *ServerHandler) UnobservedFiles() []string {
-	if !h.inMemory {
+	if !h.executionInternal {
 		if ext, ok := h.strategy.(*externalStrategy); ok {
 			return ext.goCompiler.UnobservedFiles()
 		}
@@ -130,32 +130,59 @@ func (h *ServerHandler) UnobservedFiles() []string {
 	return []string{}
 }
 
-// SetBuildOnDisk sets whether the server artifacts should be written to disk.
-func (h *ServerHandler) SetBuildOnDisk(onDisk bool) {
-	h.buildOnDisk = onDisk
+// SetCompilationOnDisk sets whether the server artifacts should be written to disk.
+func (h *ServerHandler) SetCompilationOnDisk(onDisk bool) {
+	h.compilationOnDisk = onDisk
 	// If we are in external mode, it will compile to disk on Start/Restart
-	if !h.inMemory {
-		h.Logger("Server BuildOnDisk set to:", onDisk)
+	if !h.executionInternal {
+		h.Logger("Server Compilation mode set to:", map[bool]string{true: "OnDisk", false: "InMemory"}[onDisk])
 	}
 }
 
 // SetExternalServerMode switches between Internal and External server strategies.
-func (h *ServerHandler) SetExternalServerMode(external bool) {
+// When switching to External, it also:
+// 1. Generates server template files if they don't exist
+// 2. Compiles the server
+// 3. Starts the external process
+func (h *ServerHandler) SetExternalServerMode(external bool) error {
 	if external {
-		if h.inMemory {
+		if h.executionInternal {
 			h.Logger("Switching to External Server Mode...")
-			h.inMemory = false
-			h.strategy.Stop()
+
+			// Generate template files if they don't exist
+			if err := h.generateServerFromEmbeddedMarkdown(); err != nil {
+				return err
+			}
+
+			// Stop current internal strategy
+			if err := h.strategy.Stop(); err != nil {
+				h.Logger("Warning stopping internal server:", err)
+			}
+
+			waitForPortFree(h.AppPort)
+
+			h.executionInternal = false
 			h.strategy = newExternalStrategy(h)
-			h.strategy.Start(nil)
+
+			if err := h.strategy.Start(nil); err != nil {
+				return err
+			}
 		}
 	} else {
-		if !h.inMemory {
+		if !h.executionInternal {
 			h.Logger("Switching to Internal Server Mode...")
-			h.inMemory = true
-			h.strategy.Stop()
-			h.strategy = newInMemoryStrategy(h)
-			h.strategy.Start(nil)
+
+			if err := h.strategy.Stop(); err != nil {
+				h.Logger("Warning stopping external server:", err)
+			}
+
+			waitForPortFree(h.AppPort)
+
+			h.executionInternal = true
+			h.strategy = newInternalStrategy(h)
+
+			go h.strategy.Start(nil)
 		}
 	}
+	return nil
 }

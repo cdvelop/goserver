@@ -25,26 +25,26 @@ type ServerStrategy interface {
 	Name() string
 }
 
-// --- In-Memory Strategy ---
+// --- Internal Strategy ---
 
-type inMemoryStrategy struct {
+type internalStrategy struct {
 	handler *ServerHandler
 	server  *http.Server
 	mu      sync.Mutex
 	running bool
 }
 
-func newInMemoryStrategy(h *ServerHandler) *inMemoryStrategy {
-	return &inMemoryStrategy{
+func newInternalStrategy(h *ServerHandler) *internalStrategy {
+	return &internalStrategy{
 		handler: h,
 	}
 }
 
-func (s *inMemoryStrategy) Name() string {
-	return "In-Memory"
+func (s *internalStrategy) Name() string {
+	return "Internal"
 }
 
-func (s *inMemoryStrategy) Start(wg *sync.WaitGroup) error {
+func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
@@ -77,7 +77,7 @@ func (s *inMemoryStrategy) Start(wg *sync.WaitGroup) error {
 		Handler: mux,
 	}
 
-	s.handler.Logger("Starting In-Memory Server on port:", s.handler.AppPort)
+	s.handler.Logger("Starting Internal Server on port:", s.handler.AppPort)
 
 	// Capture server instance to avoid race condition with Stop() setting s.server = nil
 	srv := s.server
@@ -103,7 +103,7 @@ func (s *inMemoryStrategy) Start(wg *sync.WaitGroup) error {
 	return nil
 }
 
-func (s *inMemoryStrategy) Stop() error {
+func (s *internalStrategy) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -116,17 +116,17 @@ func (s *inMemoryStrategy) Stop() error {
 
 	err := s.server.Shutdown(ctx)
 	if err != nil {
-		s.handler.Logger("In-Memory Server shutdown error, forcing close:", err)
+		s.handler.Logger("Internal Server shutdown error, forcing close:", err)
 		s.server.Close()
 	}
 	s.running = false
 	s.server = nil
-	s.handler.Logger("In-Memory Server stopped")
+	s.handler.Logger("Internal Server stopped")
 	return err
 }
 
-func (s *inMemoryStrategy) Restart() error {
-	s.handler.Logger("Restarting In-Memory Server...")
+func (s *internalStrategy) Restart() error {
+	s.handler.Logger("Restarting Internal Server...")
 	err := s.Stop()
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func waitForPortFree(port string) {
 	}
 }
 
-func (s *inMemoryStrategy) HandleFileEvent(fileName, extension, filePath, event string) error {
+func (s *internalStrategy) HandleFileEvent(fileName, extension, filePath, event string) error {
 	// In-memory server typically doesn't react to file events unless we want to hot-reload assets.
 	// For now, no-op or specific logic if requested.
 	return nil

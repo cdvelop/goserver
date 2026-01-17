@@ -43,9 +43,9 @@ func (s *ServerModeHandler) Label() string {
 	}
 
 	if external {
-		return "SERVER: EXTERNAL"
+		return "SERVER MODE: EXTERNAL"
 	}
-	return "SERVER: INTERNAL"
+	return "SERVER MODE: INTERNAL"
 }
 
 func (s *ServerModeHandler) Execute() {
@@ -65,13 +65,18 @@ func (s *ServerModeHandler) Execute() {
 
 	// Update handler
 	isExternal := (external == "true")
-	s.h.SetExternalServerMode(isExternal)
+	if err := s.h.SetExternalServerMode(isExternal); err != nil {
+		if s.log != nil {
+			s.log("Error switching server mode:", err)
+		}
+		return
+	}
 
 	if s.log != nil {
 		if isExternal {
-			s.log("Switched to External Server Mode")
+			s.log("Switched to External Execution Mode")
 		} else {
-			s.log("Switched to Internal Server Mode")
+			s.log("Switched to Internal Execution Mode")
 		}
 	}
 
