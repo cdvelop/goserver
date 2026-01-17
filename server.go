@@ -1,7 +1,9 @@
 package server
 
 import (
+	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 )
 
@@ -133,6 +135,24 @@ func (h *ServerHandler) UnobservedFiles() []string {
 	return []string{}
 }
 
+// serverFileWasModified returns true if the external server file
+// has been modified from the original template
+func (h *ServerHandler) serverFileWasModified() bool {
+	targetPath := filepath.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)
+
+	currentContent, err := os.ReadFile(targetPath)
+	if err != nil {
+		return false // File doesn't exist, not modified from some original (it's missing)
+	}
+
+	expectedContent, err := h.getExpectedServerContent()
+	if err != nil {
+		return true // Can't generate expectedContent, assume modified/customized
+	}
+
+	return string(currentContent) != expectedContent
+}
+
 // SetCompilationOnDisk sets whether the server artifacts should be written to disk.
 func (h *ServerHandler) SetCompilationOnDisk(onDisk bool) {
 	h.compilationOnDisk = onDisk
@@ -173,6 +193,11 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 		}
 	} else {
 		if !h.executionInternal {
+			// Check if server file was modified before allowing switch back to internal
+			if h.serverFileWasModified() {
+				return errors.New("cannot switch to Internal execution mode: server file has been customized")
+			}
+
 			h.log("Switching to Internal Server Mode...")
 
 			if err := h.strategy.Stop(); err != nil {

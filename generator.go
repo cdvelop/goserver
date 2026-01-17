@@ -19,6 +19,43 @@ type serverTemplateData struct {
 	PublicDir string
 }
 
+// getExpectedServerContent returns what the template would generate
+// Used for comparison to detect if user modified the server file
+func (h *ServerHandler) getExpectedServerContent() (string, error) {
+	data := serverTemplateData{
+		AppPort:   h.AppPort,
+		PublicDir: h.PublicDir,
+	}
+
+	// read embedded markdown
+	raw, errRead := embeddedFS.ReadFile("templates/server_basic.md")
+	if errRead != nil {
+		return "", fmt.Errorf("reading embedded template: %w", errRead)
+	}
+
+	processed, err := h.processTemplate(string(raw), data)
+	if err != nil {
+		return "", err
+	}
+
+	var extractedCode string
+	captureWriter := func(name string, data []byte) error {
+		extractedCode = string(data)
+		return nil
+	}
+
+	// use temporary NewMarkDown to extract code from processed template
+	// use "." as dummy destination as captureWriter handles the content
+	m := devflow.NewMarkDown("", ".", captureWriter).
+		InputByte([]byte(processed))
+
+	if err := m.Extract(h.mainFileExternalServer); err != nil {
+		return "", fmt.Errorf("extracting go code from template: %w", err)
+	}
+
+	return extractedCode, nil
+}
+
 // generateServerFromEmbeddedMarkdown creates the external server go file from the embedded markdown
 // It never overwrites an existing file. If template processing fails, logs to Logger and uses raw markdown.
 func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
@@ -31,43 +68,17 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 		return nil
 	}
 
-	data := serverTemplateData{
-		AppPort:   h.AppPort,
-		PublicDir: h.PublicDir,
-	}
-
-	// read embedded markdown
-	raw, errRead := embeddedFS.ReadFile("templates/server_basic.md")
-	embeddedContent := ""
-	if errRead == nil {
-		embeddedContent = string(raw)
-	} else {
-		// fallback to empty
-		embeddedContent = ""
-	}
-
-	processed, err := h.processTemplate(embeddedContent, data)
+	expectedContent, err := h.getExpectedServerContent()
 	if err != nil {
-		// processTemplate already logs; fallback to embedded raw content
-		processed = embeddedContent
+		return err
 	}
 
-	// Use devflow to extract Go code from markdown
-	writer := func(name string, data []byte) error {
-		if err := os.MkdirAll(path.Dir(name), 0o755); err != nil {
-			return err
-		}
-		return os.WriteFile(name, data, 0o644)
+	if err := os.MkdirAll(path.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("creating server directory: %w", err)
 	}
 
-	// devflow needs the full destination path
-	destDir := path.Join(h.AppRootDir, h.SourceDir)
-	m := devflow.NewMarkDown(h.AppRootDir, destDir, writer).
-		InputByte([]byte(processed))
-
-	// Extract to the main file name (mdgo will handle the path joining)
-	if err := m.Extract(h.mainFileExternalServer); err != nil {
-		return fmt.Errorf("extracting go code from markdown: %w", err)
+	if err := os.WriteFile(targetPath, []byte(expectedContent), 0o644); err != nil {
+		return fmt.Errorf("writing server file: %w", err)
 	}
 
 	h.log("Generated server file at", targetPath)

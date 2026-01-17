@@ -37,15 +37,18 @@ func (s *ServerModeHandler) Name() string {
 }
 
 func (s *ServerModeHandler) Label() string {
-	external := false
+	isExternal := false
 	if val, err := s.db.Get(StoreKeyExternalServer); err == nil && val == "true" {
-		external = true
+		isExternal = true
 	}
 
-	if external {
-		return "SERVER MODE: EXTERNAL"
+	if isExternal {
+		if s.h.serverFileWasModified() {
+			return "SERVER: External (customized)"
+		}
+		return "SERVER → Switch to Internal"
 	}
-	return "SERVER MODE: INTERNAL"
+	return "SERVER → Switch to External"
 }
 
 func (s *ServerModeHandler) Execute() {
