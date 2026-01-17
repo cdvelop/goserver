@@ -27,7 +27,7 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 
 	// Never overwrite existing files
 	if _, err := os.Stat(targetPath); err == nil {
-		h.Logger("Server file already exists at", targetPath, ", skipping generation")
+		h.log("Server file already exists at", targetPath, ", skipping generation")
 		return nil
 	}
 
@@ -70,19 +70,19 @@ func (h *ServerHandler) generateServerFromEmbeddedMarkdown() error {
 		return fmt.Errorf("extracting go code from markdown: %w", err)
 	}
 
-	h.Logger("Generated server file at", targetPath)
+	h.log("Generated server file at", targetPath)
 	return nil
 }
 
 func (h *ServerHandler) processTemplate(markdown string, data serverTemplateData) (string, error) {
 	tmpl, err := template.New("server").Parse(markdown)
 	if err != nil {
-		h.Logger("Template parsing error (using fallback):", err)
+		h.log("Template parsing error (using fallback):", err)
 		return markdown, err
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		h.Logger("Template execution error (using fallback):", err)
+		h.log("Template execution error (using fallback):", err)
 		return markdown, err
 	}
 	return buf.String(), nil

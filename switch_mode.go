@@ -7,28 +7,28 @@ import "errors"
 // This implements the transition from "Internal" to "External" mode.
 func (h *ServerHandler) CreateTemplateServer() error {
 	if !h.executionInternal {
-		h.Logger("Server is already in external mode.")
+		h.log("Server is already in external mode.")
 		return nil
 	}
 
-	h.Logger("Stopping Internal Server...")
+	h.log("Stopping Internal Server...")
 	// Stop the current internal server
 	if err := h.strategy.Stop(); err != nil {
 		return errors.Join(errors.New("failed to stop internal server"), err)
 	}
 
-	h.Logger("Generating server files...")
+	h.log("Generating server files...")
 	// Generate the physical files for the server
 	if err := h.generateServerFromEmbeddedMarkdown(); err != nil {
 		return errors.Join(errors.New("failed to generate server files"), err)
 	}
 
-	h.Logger("Switching to External Process Strategy...")
+	h.log("Switching to External Process Strategy...")
 	// Switch strategy state
 	h.executionInternal = false
 	h.strategy = newExternalStrategy(h)
 
-	h.Logger("Starting External Server...")
+	h.log("Starting External Server...")
 	// Start the new external server (compiles and runs)
 	// We pass nil for wg because this is a runtime transition, not application startup
 	if err := h.strategy.Start(nil); err != nil {
@@ -37,6 +37,6 @@ func (h *ServerHandler) CreateTemplateServer() error {
 		return errors.Join(errors.New("failed to start external server"), err)
 	}
 
-	h.Logger("Server successfully switched to External mode.")
+	h.log("Server successfully switched to External mode.")
 	return nil
 }

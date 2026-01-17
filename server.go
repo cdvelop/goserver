@@ -15,7 +15,7 @@ type ServerHandler struct {
 	strategy               ServerStrategy
 	executionInternal      bool // true = embedded server (internal), false = external process
 	compilationOnDisk      bool // true = artifacts to disk, false = in-memory
-	log                    func(message ...any)
+	onLog                  func(message ...any)
 }
 
 type Config struct {
@@ -29,6 +29,7 @@ type Config struct {
 	AppPort                     string                 // e.g., 8080
 	Routes                      []func(*http.ServeMux) // Functions to register routes on the HTTP server
 	DisableGlobalCleanup        bool                   // If true, disables global cleanup in gorun during restarts
+	Logger                      func(message ...any)   // Logger function
 	ExitChan                    chan bool              // Global channel to signal shutdown
 }
 
@@ -42,6 +43,7 @@ func NewConfig() *Config {
 		MainInputFile: "main.go", // Default convention
 		AppPort:       "8080",
 		Routes:        nil,
+		Logger:        nil,
 		ExitChan:      make(chan bool),
 	}
 }
@@ -87,12 +89,13 @@ func New(c *Config) *ServerHandler {
 	sh := &ServerHandler{
 		Config:                 c,
 		mainFileExternalServer: c.MainInputFile, // Use configured file name
+		onLog:                  c.Logger,
 	}
 
 	// Default to Internal Execution Mode
 	sh.executionInternal = true
 	sh.strategy = newInternalStrategy(sh)
-	// sh.Logger("Server initialized in Internal Mode (default)")
+	// sh.log("Server initialized in Internal Mode (default)")
 
 	return sh
 }
@@ -102,12 +105,12 @@ func (h *ServerHandler) Name() string {
 }
 
 func (h *ServerHandler) SetLog(f func(message ...any)) {
-	h.log = f
+	h.onLog = f
 }
 
-func (h *ServerHandler) Logger(messages ...any) {
-	if h.log != nil {
-		h.log(messages...)
+func (h *ServerHandler) log(messages ...any) {
+	if h.onLog != nil {
+		h.onLog(messages...)
 	}
 }
 
@@ -135,7 +138,7 @@ func (h *ServerHandler) SetCompilationOnDisk(onDisk bool) {
 	h.compilationOnDisk = onDisk
 	// If we are in external mode, it will compile to disk on Start/Restart
 	if !h.executionInternal {
-		h.Logger("Server Compilation mode set to:", map[bool]string{true: "OnDisk", false: "InMemory"}[onDisk])
+		h.log("Server Compilation mode set to:", map[bool]string{true: "OnDisk", false: "InMemory"}[onDisk])
 	}
 }
 
@@ -147,7 +150,7 @@ func (h *ServerHandler) SetCompilationOnDisk(onDisk bool) {
 func (h *ServerHandler) SetExternalServerMode(external bool) error {
 	if external {
 		if h.executionInternal {
-			h.Logger("Switching to External Server Mode...")
+			h.log("Switching to External Server Mode...")
 
 			// Generate template files if they don't exist
 			if err := h.generateServerFromEmbeddedMarkdown(); err != nil {
@@ -156,7 +159,7 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 
 			// Stop current internal strategy
 			if err := h.strategy.Stop(); err != nil {
-				h.Logger("Warning stopping internal server:", err)
+				h.log("Warning stopping internal server:", err)
 			}
 
 			waitForPortFree(h.AppPort)
@@ -170,10 +173,10 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 		}
 	} else {
 		if !h.executionInternal {
-			h.Logger("Switching to Internal Server Mode...")
+			h.log("Switching to Internal Server Mode...")
 
 			if err := h.strategy.Stop(); err != nil {
-				h.Logger("Warning stopping external server:", err)
+				h.log("Warning stopping external server:", err)
 			}
 
 			waitForPortFree(h.AppPort)

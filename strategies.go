@@ -77,14 +77,14 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 		Handler: mux,
 	}
 
-	s.handler.Logger("Starting Internal Server on port:", s.handler.AppPort)
+	s.handler.log("Starting Internal Server on port:", s.handler.AppPort)
 
 	// Capture server instance to avoid race condition with Stop() setting s.server = nil
 	srv := s.server
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.handler.Logger("In-Memory Server error:", err)
+			s.handler.log("In-Memory Server error:", err)
 		}
 	}()
 
@@ -116,17 +116,17 @@ func (s *internalStrategy) Stop() error {
 
 	err := s.server.Shutdown(ctx)
 	if err != nil {
-		s.handler.Logger("Internal Server shutdown error, forcing close:", err)
+		s.handler.log("Internal Server shutdown error, forcing close:", err)
 		s.server.Close()
 	}
 	s.running = false
 	s.server = nil
-	s.handler.Logger("Internal Server stopped")
+	s.handler.log("Internal Server stopped")
 	return err
 }
 
 func (s *internalStrategy) Restart() error {
-	s.handler.Logger("Restarting Internal Server...")
+	s.handler.log("Restarting Internal Server...")
 	err := s.Stop()
 	if err != nil {
 		return err
@@ -183,7 +183,7 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 
 	// Ensure the output directory exists
 	if err := os.MkdirAll(filepath.Join(h.AppRootDir, h.OutputDir), 0755); err != nil {
-		h.Logger("Error creating output directory:", err)
+		h.log("Error creating output directory:", err)
 	}
 
 	compiler := gobuild.New(&gobuild.Config{
@@ -242,20 +242,20 @@ func (s *externalStrategy) startServer() error {
 		return errors.Join(e, err)
 	}
 
-	s.handler.Logger("Started:", path.Join(s.handler.SourceDir, s.handler.mainFileExternalServer), "Port:", s.handler.AppPort)
+	s.handler.log("Started:", path.Join(s.handler.SourceDir, s.handler.mainFileExternalServer), "Port:", s.handler.AppPort)
 	return nil
 }
 
 func (s *externalStrategy) Stop() error {
 	if s.goRun != nil {
-		s.handler.Logger("Stopping external server...")
+		s.handler.log("Stopping external server...")
 		return s.goRun.StopProgramAndCleanup(true)
 	}
 	return nil
 }
 
 func (s *externalStrategy) Restart() error {
-	s.handler.Logger("Restarting External Server...")
+	s.handler.log("Restarting External Server...")
 	err := s.Stop()
 	if err != nil {
 		return err
@@ -266,12 +266,12 @@ func (s *externalStrategy) Restart() error {
 
 func (s *externalStrategy) HandleFileEvent(fileName, extension, filePath, event string) error {
 	if event == "write" {
-		s.handler.Logger("Go file modified, restarting external server ...")
+		s.handler.log("Go file modified, restarting external server ...")
 		err := s.Restart()
 		if err != nil {
-			s.handler.Logger("RestartServer failed:", err)
+			s.handler.log("RestartServer failed:", err)
 		} else {
-			s.handler.Logger("RestartServer succeeded")
+			s.handler.log("RestartServer succeeded")
 		}
 		return err
 	}
