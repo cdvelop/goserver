@@ -198,7 +198,7 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 	})
 
 	runner := gorun.New(&gorun.Config{
-		ExecProgramPath:      "./" + compiler.MainOutputFileNameWithExtension(),
+		ExecProgramPath:      compiler.FinalOutputPath(),
 		RunArguments:         h.ArgumentsToRunServer,
 		ExitChan:             h.ExitChan,
 		Logger:               h.Logger,
@@ -219,12 +219,26 @@ func (s *externalStrategy) Name() string {
 }
 
 func (s *externalStrategy) Start(wg *sync.WaitGroup) error {
-	defer func() {
+	if err := s.startServer(); err != nil {
 		if wg != nil {
 			wg.Done()
 		}
-	}()
-	return s.startServer()
+		return err
+	}
+
+	// Block until exit signal received
+	if s.handler.ExitChan != nil {
+		<-s.handler.ExitChan
+	}
+
+	// Stop the server
+	s.Stop()
+
+	if wg != nil {
+		wg.Done()
+	}
+
+	return nil
 }
 
 func (s *externalStrategy) startServer() error {
@@ -261,7 +275,27 @@ func (s *externalStrategy) Restart() error {
 		return err
 	}
 	waitForPortFree(s.handler.AppPort) // Ensure port is free
-	return s.Start(nil)
+
+	// Compile synchronously to catch compilation errors
+	if err := s.goCompiler.CompileProgram(); err != nil {
+		return err
+	}
+
+	// Only start the program if compilation succeeded (run in goroutine to not block)
+	go func() {
+		if err := s.goRun.RunProgram(); err != nil {
+			s.handler.log("RunProgram failed:", err)
+			return
+		}
+		s.handler.log("External server restarted successfully")
+
+		// Block until exit signal received
+		if s.handler.ExitChan != nil {
+			<-s.handler.ExitChan
+		}
+		s.Stop()
+	}()
+	return nil
 }
 
 func (s *externalStrategy) HandleFileEvent(fileName, extension, filePath, event string) error {

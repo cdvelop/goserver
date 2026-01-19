@@ -70,10 +70,7 @@ func main() {
 	}
 
 	// Start the server for the first time
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go handler.StartServer(&wg)
-	wg.Wait()
+	go handler.StartServer(nil)
 
 	// Give it time to compile and start
 	time.Sleep(500 * time.Millisecond)
@@ -110,9 +107,7 @@ func main() {
 
 	// Start the server again - it should recompile
 	cfg.ExitChan = make(chan bool, 1) // Reset exit channel
-	wg.Add(1)
-	go handler.StartServer(&wg)
-	wg.Wait()
+	go handler.StartServer(nil)
 
 	// Give it time to compile and start
 	time.Sleep(500 * time.Millisecond)
@@ -192,10 +187,7 @@ func main() {
 	}
 
 	// Start the server first
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go handler.StartServer(&wg)
-	wg.Wait()
+	go handler.StartServer(nil)
 
 	// Give it time to compile and start
 	time.Sleep(500 * time.Millisecond)
@@ -305,10 +297,7 @@ func UtilFunction() string {
 	}
 
 	// Start the server first
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go handler.StartServer(&wg)
-	wg.Wait()
+	go handler.StartServer(nil)
 
 	// Give it time to compile and start
 	time.Sleep(500 * time.Millisecond)

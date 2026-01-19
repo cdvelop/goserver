@@ -6,6 +6,9 @@ import "errors"
 // It generates the server files (if not present), compiles, and runs them.
 // This implements the transition from "Internal" to "External" mode.
 func (h *ServerHandler) CreateTemplateServer() error {
+	h.strategyMu.Lock()
+	defer h.strategyMu.Unlock()
+
 	if !h.executionInternal {
 		h.log("Server is already in external mode.")
 		return nil

@@ -22,12 +22,17 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 		logMessages = append(logMessages, fmt.Sprint(messages...))
 	}
 
+	exitChan := make(chan bool, 1)
+	// Pre-fill exit channel so Start() doesn't block waiting
+	exitChan <- true
+
 	cfg := &Config{
-		AppRootDir: tmp,
-		SourceDir:  "src/app",
-		OutputDir:  "deploy",
-		AppPort:    "0", // Use random port to avoid conflicts if it runs
-		ExitChan:   make(chan bool, 1),
+		AppRootDir:           tmp,
+		SourceDir:            "src/app",
+		OutputDir:            "deploy",
+		AppPort:              "0", // Use random port to avoid conflicts if it runs
+		ExitChan:             exitChan,
+		DisableGlobalCleanup: true,
 	}
 
 	h := New(cfg)

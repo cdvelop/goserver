@@ -72,10 +72,7 @@ func main() {
 	}
 
 	// Start the server so there is a running process to stop on restart
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go handler.StartServer(&wg)
-	wg.Wait()
+	go handler.StartServer(nil)
 
 	// Give it time to compile and start
 	time.Sleep(500 * time.Millisecond)

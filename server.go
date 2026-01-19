@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/tinywasm/fmt"
 )
@@ -40,8 +41,9 @@ type ServerHandler struct {
 	*Config
 	mainFileExternalServer string // eg: main.server.go
 	strategy               ServerStrategy
-	executionInternal      bool // true = embedded server (internal), false = external process
-	compilationOnDisk      bool // true = artifacts to disk, false = in-memory
+	strategyMu             sync.RWMutex // protects strategy field
+	executionInternal      bool         // true = embedded server (internal), false = external process
+	compilationOnDisk      bool         // true = artifacts to disk, false = in-memory
 	onLog                  func(message ...any)
 }
 
@@ -266,6 +268,9 @@ func (h *ServerHandler) SetCompilationOnDisk(onDisk bool) {
 // 2. Compiles the server
 // 3. Starts the external process
 func (h *ServerHandler) SetExternalServerMode(external bool) error {
+	h.strategyMu.Lock()
+	defer h.strategyMu.Unlock()
+
 	if external {
 		if h.executionInternal {
 			h.log("Switching to External Server Mode...")
@@ -285,9 +290,7 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 			h.executionInternal = false
 			h.strategy = newExternalStrategy(h)
 
-			if err := h.strategy.Start(nil); err != nil {
-				return err
-			}
+			go h.strategy.Start(nil)
 			_ = h.Store.Set(StoreKeyExternalServer, "true")
 		}
 	} else {
