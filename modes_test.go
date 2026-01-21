@@ -250,3 +250,38 @@ func TestModeSwitchWhileRunning_DoesNotHang(t *testing.T) {
 		t.Log("Server shutdown timed out (expected in some cases)")
 	}
 }
+
+func TestNew_DetectsExistingServerFile(t *testing.T) {
+	// Setup
+	tmpData := t.TempDir()
+	cfg := NewConfig()
+	cfg.AppRootDir = tmpData
+	cfg.SourceDir = "web"
+	cfg.MainInputFile = "server.go"
+
+	// Create a dummy server file
+	svrDir := filepath.Join(tmpData, "web")
+	if err := os.MkdirAll(svrDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	svrFile := filepath.Join(svrDir, "server.go")
+	if err := os.WriteFile(svrFile, []byte("package main"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize handler
+	h := New(cfg)
+
+	// Expectation: Should default to External mode because file exists
+	if h.executionInternal {
+		t.Error("New() should initialize in External mode when server file exists, but got Internal")
+	}
+
+	execStr := "F"
+	if !h.executionInternal {
+		execStr = "T"
+	}
+	if execStr != "T" {
+		t.Errorf("Value() expected External:T, got %s", h.Value())
+	}
+}

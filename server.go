@@ -140,6 +140,19 @@ func New(c *Config) *ServerHandler {
 		sh.strategy = newExternalStrategy(sh)
 	}
 
+	// If a custom server file exists, it takes precedence over default configuration
+	serverFilePath := filepath.Join(sh.AppRootDir, sh.SourceDir, sh.mainFileExternalServer)
+	if _, err := os.Stat(serverFilePath); err == nil && sh.executionInternal {
+		// Only log if we are actually switching mode due to file presence
+		if sh.onLog != nil {
+			sh.onLog("Found existing server file, switching to External Server Mode")
+		}
+		sh.executionInternal = false
+		sh.strategy = newExternalStrategy(sh)
+		// Update store to reflect the state
+		_ = sh.Store.Set(StoreKeyExternalServer, "true")
+	}
+
 	if val, err := sh.Store.Get(StoreKeyCompilationOnDisk); err == nil && val == "true" {
 		sh.compilationOnDisk = true
 	}
