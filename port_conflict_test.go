@@ -98,10 +98,9 @@ func main() {
 	}
 
 	h := server.New(cfg)
-	h.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
+	h.SetLog(t.Log)
 
 	// Test 1: Start server normally
-	t.Log("🚀 Starting first server instance...")
 	if err := h.SetExternalServerMode(true); err != nil {
 		t.Fatalf("failed to set external server mode: %v", err)
 	} // Ensure it uses gorun
@@ -110,8 +109,6 @@ func main() {
 	time.Sleep(1 * time.Second)
 
 	// Test 2: Try to start a second server on the same port (this should cause conflict)
-	t.Log("🚀 Starting second server instance (this should conflict)...")
-
 	// Create second handler with same port
 	cfg2 := &server.Config{
 		AppRootDir: tmp,
@@ -122,7 +119,7 @@ func main() {
 	}
 
 	h2 := server.New(cfg2)
-	h2.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
+	h2.SetLog(t.Log)
 	if err := h2.SetExternalServerMode(true); err != nil {
 		t.Fatalf("failed to set external server mode: %v", err)
 	}
@@ -134,7 +131,6 @@ func main() {
 	ln.Close()
 
 	// Test 3: Try restart - this should work now that the port is free
-	t.Log("🔄 Attempting restart on first server...")
 	err = h.StopServer() // New StopServer method
 	if err != nil {
 		t.Logf("StopServer reported error (expected if it failed to start fully): %v", err)
@@ -148,13 +144,11 @@ func main() {
 	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	if resp, httpErr := client.Get(url); httpErr == nil {
 		resp.Body.Close()
-		if resp.StatusCode == 200 {
-			t.Log("✅ Restarted server is responding correctly")
-		} else {
-			t.Logf("❌ Restarted server wrong status: %d", resp.StatusCode)
+		if resp.StatusCode != 200 {
+			t.Errorf("❌ Restarted server wrong status: %d", resp.StatusCode)
 		}
 	} else {
-		t.Logf("❌ Restarted server not responding: %v", httpErr)
+		t.Errorf("❌ Restarted server not responding: %v", httpErr)
 	}
 
 	// Cleanup

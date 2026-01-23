@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +17,7 @@ func newTestHandler(t *testing.T, sourceDir, outputDir, appRootDir string) *Serv
 		ExitChan:   make(chan bool),
 	}
 	h := New(cfg)
-	h.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
+	h.SetLog(t.Log)
 	return h
 }
 

@@ -55,7 +55,7 @@ func TestGeneratedServerStartsAndResponds(t *testing.T) {
 	}
 
 	h := server.New(cfg)
-	h.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
+	h.SetLog(t.Log)
 
 	// Start server (uses internal API but from server_test package we need to export it or use New and switch)
 	// Actually, this test wants to manually build and run the server file.

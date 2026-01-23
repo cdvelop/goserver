@@ -127,9 +127,11 @@ func main() {
 	cfg.ExitChan <- true
 	wg.Wait()
 
-	mu.Lock()
-	t.Logf("Compilation logs: %v", logMessages)
-	mu.Unlock()
+	if t.Failed() {
+		mu.Lock()
+		t.Logf("Compilation logs: %v", logMessages)
+		mu.Unlock()
+	}
 }
 
 // TestNewFileEventTriggersRecompilation verifica que NewFileEvent recompile cuando se notifica
@@ -227,7 +229,9 @@ func main() {
 	cfg.ExitChan <- true
 	time.Sleep(100 * time.Millisecond)
 
-	t.Logf("File event logs: %s", logOutput)
+	if t.Failed() {
+		t.Logf("File event logs: %s", logOutput)
+	}
 }
 
 // TestNewFileEventOnOtherGoFiles verifica que cambios en otros archivos Go también recompilen
@@ -337,7 +341,9 @@ func UtilFunction() string {
 	cfg.ExitChan <- true
 	time.Sleep(100 * time.Millisecond)
 
-	t.Logf("Shared file event logs: %s", logOutput)
+	if t.Failed() {
+		t.Logf("Shared file event logs: %s", logOutput)
+	}
 }
 
 // Helper function to check if a string contains any of the given substrings

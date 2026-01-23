@@ -250,12 +250,13 @@ func TestModeSwitchWhileRunning_DoesNotHang(t *testing.T) {
 		t.Fatal("Change() hung - mode switch blocked")
 	}
 
-	// Check logs for errors
-	logsMu.Lock()
-	for _, log := range logs {
-		t.Logf("LOG: %s", log)
+	if t.Failed() {
+		logsMu.Lock()
+		for _, log := range logs {
+			t.Logf("LOG: %s", log)
+		}
+		logsMu.Unlock()
 	}
-	logsMu.Unlock()
 
 	// Verify mode changed
 	if h.executionInternal {

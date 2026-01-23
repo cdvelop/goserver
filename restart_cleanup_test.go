@@ -125,10 +125,9 @@ func main() {
 	}
 
 	h := server.New(serverConfig)
-	h.SetLog(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
+	h.SetLog(t.Log)
 
 	// Test 1: Initial start
-	t.Log("🚀 Starting external server (v1)...")
 	if err := h.SetExternalServerMode(true); err != nil {
 		t.Fatalf("failed to set external server mode: %v", err)
 	} // Ensure it uses gorun
@@ -147,18 +146,16 @@ func main() {
 	if resp.StatusCode != 200 {
 		t.Fatalf("Initial server wrong status: %d", resp.StatusCode)
 	}
-	t.Log("✅ Initial server (v1) is responding")
 
 	// Test 2: Check for process conflicts before restart
-	t.Log("🔍 Checking for process conflicts...")
 	checkCmd := exec.Command("lsof", "-i", ":"+fmt.Sprintf("%d", port))
 	if out, err := checkCmd.CombinedOutput(); err == nil && len(out) > 0 {
-		t.Logf("Port %d usage before restart:\n%s", port, string(out))
+		if t.Failed() {
+			t.Logf("Port %d usage before restart:\n%s", port, string(out))
+		}
 	}
 
 	// Test 3: Restart with new version
-	t.Log("🔄 Restarting server with updated version...")
-
 	// Create server v2
 	serverV2 := fmt.Sprintf(`package main
 
@@ -223,15 +220,13 @@ func main() {
 	// Attempt restart
 	err = h.RestartServer()
 	if err != nil {
-		t.Logf("❌ RestartServer failed: %v", err)
-
 		// Check what's using the port now
 		checkCmd2 := exec.Command("lsof", "-i", ":"+fmt.Sprintf("%d", port))
 		if out, err := checkCmd2.CombinedOutput(); err == nil && len(out) > 0 {
 			t.Logf("Port %d usage after failed restart:\n%s", port, string(out))
 		}
 
-		t.Fatalf("Restart failed")
+		t.Fatalf("Restart failed: %v", err)
 	}
 
 	// Test 4: Verify new version is running
@@ -249,8 +244,6 @@ func main() {
 	if responseText != "Server is running v2" {
 		t.Fatalf("Expected 'Server is running v2', got '%s'", responseText)
 	}
-
-	t.Log("✅ Server restart successful - now running v2")
 
 	// Cleanup
 	h.StopServer()

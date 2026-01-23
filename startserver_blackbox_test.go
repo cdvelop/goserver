@@ -55,8 +55,8 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	// We primarily care that it generated the file.
 	err := h.CreateTemplateServer()
 
-	if err != nil {
-		t.Logf("CreateTemplateServer returned error (expected in restricted test env if compile fails): %v", err)
+	if err != nil && t.Failed() {
+		t.Logf("CreateTemplateServer returned error: %v", err)
 	}
 
 	// Now the generated file should exist
