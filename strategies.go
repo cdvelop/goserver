@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -171,13 +172,24 @@ func waitForPortFree(port string) {
 	}
 }
 
-// waitForPortListening waits until the port is accepting connections (server is ready)
-// waitForPortListening waits until the port is accepting HTTP connections (server is ready)
-func waitForPortListening(port string, timeout time.Duration) bool {
+// waitForPortListening waits until the port is accepting HTTP or HTTPS connections (server is ready)
+func waitForPortListening(port string, timeout time.Duration, https bool) bool {
 	// Use 127.0.0.1 to force IPv4, avoiding issues where localhost resolves to [::1] (IPv6)
 	// but the server is listening on IPv4 only.
-	url := "http://127.0.0.1:" + port + "/"
-	client := &http.Client{Timeout: 500 * time.Millisecond}
+	scheme := "http"
+	if https {
+		scheme = "https"
+	}
+	url := scheme + "://127.0.0.1:" + port + "/"
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{
+		Timeout:   500 * time.Millisecond,
+		Transport: tr,
+	}
+
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(url)
@@ -302,12 +314,12 @@ func (s *externalStrategy) startServer() error {
 	// Signal when server is ready in a separate goroutine (non-blocking)
 	// Checks every 50ms until port is listening or 30s timeout
 	go func() {
-		if waitForPortListening(s.handler.AppPort, 30*time.Second) {
+		if waitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
 			s.handler.log("Server is now accepting connections on port:", s.handler.AppPort)
 			// Trigger browser open only once
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
-					s.handler.OpenBrowser(s.handler.AppPort, false) // TODO: track if https is needed
+					s.handler.OpenBrowser(s.handler.AppPort, s.handler.Https)
 				}
 			})
 		} else {
@@ -315,7 +327,7 @@ func (s *externalStrategy) startServer() error {
 			// Try to open anyway on first attempt
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
-					s.handler.OpenBrowser(s.handler.AppPort, false)
+					s.handler.OpenBrowser(s.handler.AppPort, s.handler.Https)
 				}
 			})
 		}
