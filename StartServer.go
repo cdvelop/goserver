@@ -8,6 +8,9 @@ import (
 
 // StartServer initiates the server using the current strategy (In-Memory or External)
 func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
+	// Notify external systems before starting (e.g., switch client/assets to disk mode)
+	h.OnExternalModeExecution(!h.executionInternal)
+
 	if err := h.strategy.Start(wg); err != nil {
 		h.log("StartServer error:", err)
 	}

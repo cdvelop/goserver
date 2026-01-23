@@ -21,8 +21,12 @@ type UI interface {
 	RefreshUI()
 }
 
-const StoreKeyExternalServer = "server_external_mode"
-const StoreKeyCompilationOnDisk = "server_compilation_ondisk"
+const (
+	StoreKeyExternalServer    = "server_external_mode"
+	StoreKeyCompilationOnDisk = "server_compilation_ondisk"
+	EnvKeyServerPort          = "SERVER_PORT"
+	EnvKeyServerHttps         = "SERVER_HTTPS"
+)
 
 // TestMode is a global flag to indicate the server is running in a test environment.
 // This is used to disable aggressive cleanups and other disruptive behaviors.
@@ -45,6 +49,7 @@ type ServerHandler struct {
 	executionInternal      bool         // true = embedded server (internal), false = external process
 	compilationOnDisk      bool         // true = artifacts to disk, false = in-memory
 	onLog                  func(message ...any)
+	openBrowserOnce        sync.Once
 }
 
 type Config struct {
@@ -56,12 +61,16 @@ type Config struct {
 	ArgumentsForCompilingServer func() []string        // e.g., []string{"-X 'main.version=v1.0.0'"}
 	ArgumentsToRunServer        func() []string        // e.g., []string{"dev"}
 	AppPort                     string                 // e.g., 8080
+	Https                       bool                   // true if HTTPS is enabled
 	Routes                      []func(*http.ServeMux) // Functions to register routes on the HTTP server
 	DisableGlobalCleanup        bool                   // If true, disables global cleanup in gorun during restarts
 	Logger                      func(message ...any)   // Logger function
 	ExitChan                    chan bool              // Global channel to signal shutdown
-	Store                       Store                  // Persistent storage for modes
-	UI                          UI                     // UI for refresh notifications
+	OpenBrowser                 func(port string, https bool)
+	Store                       Store                    // Persistent storage for modes
+	UI                          UI                       // UI for refresh notifications
+	OnExternalModeExecution     func(isExternal bool)    // Called before StartServer to notify mode change
+	GitIgnoreAdd                func(entry string) error // Callback to add entries to .gitignore
 }
 
 // NewConfig provides a default configuration.
@@ -114,6 +123,12 @@ func New(c *Config) *ServerHandler {
 		}
 		if c.ArgumentsToRunServer == nil {
 			c.ArgumentsToRunServer = func() []string { return nil }
+		}
+		if c.OnExternalModeExecution == nil {
+			c.OnExternalModeExecution = func(bool) {}
+		}
+		if c.GitIgnoreAdd == nil {
+			c.GitIgnoreAdd = func(string) error { return nil }
 		}
 	}
 

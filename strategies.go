@@ -79,11 +79,29 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 
 	s.handler.log("Starting Internal Server on port:", s.handler.AppPort)
 
+	// Create listener first to know exactly when we're ready
+	ln, err := net.Listen("tcp", ":"+s.handler.AppPort)
+	if err != nil {
+		s.handler.log("Internal Server listen error:", err)
+		s.running = false
+		if wg != nil {
+			wg.Done()
+		}
+		return err
+	}
+
+	// Signal that server is ready to accept connections and trigger browser open
+	s.handler.openBrowserOnce.Do(func() {
+		if s.handler.OpenBrowser != nil {
+			s.handler.OpenBrowser(s.handler.AppPort, false) // Internal server is always http
+		}
+	})
+
 	// Capture server instance to avoid race condition with Stop() setting s.server = nil
 	srv := s.server
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			s.handler.log("In-Memory Server error:", err)
 		}
 	}()
@@ -153,6 +171,25 @@ func waitForPortFree(port string) {
 	}
 }
 
+// waitForPortListening waits until the port is accepting connections (server is ready)
+// waitForPortListening waits until the port is accepting HTTP connections (server is ready)
+func waitForPortListening(port string, timeout time.Duration) bool {
+	// Use 127.0.0.1 to force IPv4, avoiding issues where localhost resolves to [::1] (IPv6)
+	// but the server is listening on IPv4 only.
+	url := "http://127.0.0.1:" + port + "/"
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
+}
+
 func (s *internalStrategy) HandleFileEvent(fileName, extension, filePath, event string) error {
 	// In-memory server typically doesn't react to file events unless we want to hot-reload assets.
 	// For now, no-op or specific logic if requested.
@@ -207,6 +244,12 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 		WorkingDir:           filepath.Join(h.AppRootDir, h.OutputDir),
 	})
 
+	// Add output binary to .gitignore to prevent accidental commits
+	binaryPath := filepath.Join(h.OutputDir, outName+exe_ext)
+	if h.GitIgnoreAdd != nil {
+		_ = h.GitIgnoreAdd(binaryPath)
+	}
+
 	return &externalStrategy{
 		handler:    h,
 		goCompiler: compiler,
@@ -255,6 +298,28 @@ func (s *externalStrategy) startServer() error {
 	if err != nil {
 		return errors.Join(e, err)
 	}
+
+	// Signal when server is ready in a separate goroutine (non-blocking)
+	// Checks every 50ms until port is listening or 30s timeout
+	go func() {
+		if waitForPortListening(s.handler.AppPort, 30*time.Second) {
+			s.handler.log("Server is now accepting connections on port:", s.handler.AppPort)
+			// Trigger browser open only once
+			s.handler.openBrowserOnce.Do(func() {
+				if s.handler.OpenBrowser != nil {
+					s.handler.OpenBrowser(s.handler.AppPort, false) // TODO: track if https is needed
+				}
+			})
+		} else {
+			s.handler.log("Warning: Server may not be ready, port not responding after 30s")
+			// Try to open anyway on first attempt
+			s.handler.openBrowserOnce.Do(func() {
+				if s.handler.OpenBrowser != nil {
+					s.handler.OpenBrowser(s.handler.AppPort, false)
+				}
+			})
+		}
+	}()
 
 	s.handler.log("Started:", path.Join(s.handler.SourceDir, s.handler.mainFileExternalServer), "Port:", s.handler.AppPort)
 	return nil

@@ -70,14 +70,17 @@ func main() {
 	}
 
 	// Start the server for the first time
-	go handler.StartServer(nil)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go handler.StartServer(&wg)
 
 	// Give it time to compile and start
 	time.Sleep(500 * time.Millisecond)
 
 	// Stop the server
 	cfg.ExitChan <- true
-	time.Sleep(100 * time.Millisecond)
+	// Wait for server to fully stop to prevent data race on cfg.ExitChan
+	wg.Wait()
 
 	// Now modify the server file
 	modifiedContent := `package main
@@ -107,7 +110,8 @@ func main() {
 
 	// Start the server again - it should recompile
 	cfg.ExitChan = make(chan bool, 1) // Reset exit channel
-	go handler.StartServer(nil)
+	wg.Add(1)
+	go handler.StartServer(&wg)
 
 	// Give it time to compile and start
 	time.Sleep(500 * time.Millisecond)
@@ -121,7 +125,7 @@ func main() {
 
 	// Stop the server
 	cfg.ExitChan <- true
-	time.Sleep(100 * time.Millisecond)
+	wg.Wait()
 
 	mu.Lock()
 	t.Logf("Compilation logs: %v", logMessages)

@@ -169,6 +169,35 @@ func TestSetCompilationOnDisk(t *testing.T) {
 	}
 }
 
+func TestGitIgnoreAdd_CalledOnExternalMode(t *testing.T) {
+	tmpData := t.TempDir()
+	cfg := NewConfig()
+	cfg.AppRootDir = tmpData
+	cfg.SourceDir = "web"
+	cfg.OutputDir = "web"
+	cfg.MainInputFile = "server.go"
+
+	var capturedEntry string
+	cfg.GitIgnoreAdd = func(entry string) error {
+		capturedEntry = entry
+		return nil
+	}
+
+	h := New(cfg)
+
+	// Switch to external mode - this should trigger GitIgnoreAdd
+	err := h.SetExternalServerMode(true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the binary path was added to gitignore
+	expectedPath := filepath.Join("web", "server") // OutputDir + binary name (no .exe on linux)
+	if capturedEntry != expectedPath {
+		t.Errorf("GitIgnoreAdd called with %q, want %q", capturedEntry, expectedPath)
+	}
+}
+
 func TestModeSwitchWhileRunning_DoesNotHang(t *testing.T) {
 	tmpData := t.TempDir()
 	cfg := NewConfig()
