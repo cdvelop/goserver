@@ -25,14 +25,14 @@ func TestServerHandler_Value(t *testing.T) {
 	h := New(cfg)
 
 	// Case 1: Default (Internal + In-Memory)
-	if got := h.Value(); got != "Execution External:F, Build OnDisk:F" {
+	if got := h.Value(); got != "Execution External:F" {
 		t.Errorf("default Value() = %q", got)
 	}
 
 	// Case 2: Modified state
 	h.executionInternal = false
 	h.compilationOnDisk = true
-	if got := h.Value(); got != "Execution External:T, Build OnDisk:T" {
+	if got := h.Value(); got != "Execution External:T" {
 		t.Errorf("modified Value() = %q", got)
 	}
 }
@@ -42,13 +42,12 @@ func TestServerHandler_Change(t *testing.T) {
 		name     string
 		input    string
 		wantExec bool // true = internal, false = external
-		wantDisk bool
 	}{
-		{"both T", "Execution External:T, Build OnDisk:T", false, true},
-		{"both F", "Execution External:F, Build OnDisk:F", true, false},
-		{"lowercase", "Execution External:t, Build OnDisk:f", false, false},
-		{"full words", "Execution External:true, Build OnDisk:false", false, false},
-		{"uppercase words", "Execution External:TRUE, Build OnDisk:FALSE", false, false},
+		{"external T", "Execution External:T", false},
+		{"external F", "Execution External:F", true}, // Technically no-op if internal already
+		{"lowercase", "Execution External:t", false},
+		{"full words", "Execution External:true", false},
+		{"uppercase words", "Execution External:TRUE", false},
 	}
 
 	for _, tt := range tests {
@@ -66,9 +65,6 @@ func TestServerHandler_Change(t *testing.T) {
 
 			if h.executionInternal != tt.wantExec {
 				t.Errorf("executionInternal = %v, want %v", h.executionInternal, tt.wantExec)
-			}
-			if h.compilationOnDisk != tt.wantDisk {
-				t.Errorf("compilationOnDisk = %v, want %v", h.compilationOnDisk, tt.wantDisk)
 			}
 		})
 	}
@@ -102,7 +98,7 @@ func TestSetExternalServerMode_SwitchesToExternal(t *testing.T) {
 	}
 }
 
-func TestSetExternalServerMode_SwitchesToInternal_Unmodified(t *testing.T) {
+func TestSetExternalServerMode_PreventsSwitchingToInternal(t *testing.T) {
 	tmpData := t.TempDir()
 	cfg := NewConfig()
 	cfg.AppRootDir = tmpData
@@ -110,20 +106,27 @@ func TestSetExternalServerMode_SwitchesToInternal_Unmodified(t *testing.T) {
 
 	h := New(cfg)
 
+	// 1. Switch to External
 	if err := h.SetExternalServerMode(true); err != nil {
 		t.Fatalf("unexpected error switching to external: %v", err)
 	}
 
-	if err := h.SetExternalServerMode(false); err != nil {
-		t.Fatalf("expected no error switching back to internal when unmodified, got: %v", err)
+	// 2. Attempt switch back to Internal should fail
+	if err := h.SetExternalServerMode(false); err == nil {
+		t.Fatal("expected error preventing switch back to internal, got nil")
+	} else if !strings.Contains(err.Error(), "cannot switch back") {
+		t.Errorf("unexpected error message: %v", err)
 	}
 
-	if !h.executionInternal {
-		t.Fatal("expected executionInternal to be true after switching back to internal")
+	// 3. Verify state remains External
+	if h.executionInternal {
+		t.Fatal("expected executionInternal to remain false (external) after failed switch")
 	}
 }
 
 func TestSetExternalServerMode_BlocksInternal_WhenModified(t *testing.T) {
+	// This test is now redundant or covers a subset of PreventsSwitchingToInternal
+	// checks, but we'll keep it simple to verify behavior even with modifications.
 	tmpData := t.TempDir()
 	cfg := NewConfig()
 	cfg.AppRootDir = tmpData
@@ -135,7 +138,7 @@ func TestSetExternalServerMode_BlocksInternal_WhenModified(t *testing.T) {
 		t.Fatalf("unexpected error switching to external: %v", err)
 	}
 
-	// Modify generated file
+	// Modify generated file (irrelevant now, but good to ensure no regressions)
 	targetPath := filepath.Join(tmpData, "src", cfg.MainInputFile)
 	err := os.WriteFile(targetPath, []byte("package main\n\nfunc main() { /* modified */ }\n"), 0644)
 	if err != nil {
@@ -144,15 +147,11 @@ func TestSetExternalServerMode_BlocksInternal_WhenModified(t *testing.T) {
 
 	err = h.SetExternalServerMode(false)
 	if err == nil {
-		t.Fatal("expected error when switching to internal after modification, but got nil")
+		t.Fatal("expected error switching back to internal")
 	}
-
-	if !strings.Contains(err.Error(), "customized") {
-		t.Errorf("expected error message to mention 'customized', got: %v", err)
-	}
-
-	if h.executionInternal {
-		t.Fatal("expected executionInternal to remain false after failed switch")
+	// The specific error message about "customized" is gone, replaced by the generic block
+	if !strings.Contains(err.Error(), "cannot switch back") {
+		t.Errorf("expected error message to mention 'cannot switch back', got: %v", err)
 	}
 }
 
@@ -238,7 +237,7 @@ func TestModeSwitchWhileRunning_DoesNotHang(t *testing.T) {
 	// Call Change() to switch to external mode - this is what app does via TUI
 	done := make(chan struct{})
 	go func() {
-		h.Change("Execution External:T, Build OnDisk:F")
+		h.Change("Execution External:T")
 		close(done)
 	}()
 

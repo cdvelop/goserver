@@ -186,11 +186,7 @@ func (h *ServerHandler) Value() string {
 	if !h.executionInternal {
 		exec = "T"
 	}
-	build := "F"
-	if h.compilationOnDisk {
-		build = "T"
-	}
-	return "Execution External:" + exec + ", Build OnDisk:" + build
+	return "Execution External:" + exec
 }
 
 // Change implements HandlerEdit.Change
@@ -214,8 +210,6 @@ func (h *ServerHandler) Change(newValue string) {
 			if err := h.SetExternalServerMode(isTrue); err != nil {
 				h.log("Mode change error:", err)
 			}
-		case "Build OnDisk":
-			h.SetCompilationOnDisk(isTrue)
 		}
 	}
 
@@ -323,24 +317,7 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 		}
 	} else {
 		if !h.executionInternal {
-			// Check if server file was modified before allowing switch back to internal
-			if h.serverFileWasModified() {
-				return errors.New("cannot switch to Internal execution mode: server file has been customized")
-			}
-
-			h.log("Switching to Internal Server Mode...")
-
-			if err := h.strategy.Stop(); err != nil {
-				h.log("Warning stopping external server:", err)
-			}
-
-			waitForPortFree(h.AppPort)
-
-			h.executionInternal = true
-			h.strategy = newInternalStrategy(h)
-
-			go h.strategy.Start(nil)
-			_ = h.Store.Set(StoreKeyExternalServer, "false")
+			return errors.New("cannot switch back to Internal execution mode once External mode is active")
 		}
 	}
 	return nil
