@@ -242,7 +242,7 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 		Extension:                 exe_ext,
 		CompilingArguments:        h.ArgumentsForCompilingServer,
 		OutFolderRelativePath:     filepath.Join(h.AppRootDir, h.OutputDir),
-		Logger:                    h.Logger,
+		Logger:                    h.log,
 		Timeout:                   30 * time.Second,
 	})
 
@@ -250,7 +250,7 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 		ExecProgramPath:      compiler.FinalOutputPath(),
 		RunArguments:         h.ArgumentsToRunServer,
 		ExitChan:             h.ExitChan,
-		Logger:               h.Logger,
+		Logger:               h.log,
 		KillAllOnStop:        true,
 		DisableGlobalCleanup: h.Config.DisableGlobalCleanup,
 		WorkingDir:           filepath.Join(h.AppRootDir, h.OutputDir),
@@ -302,12 +302,16 @@ func (s *externalStrategy) startServer() error {
 	// ALWAYS COMPILE before running
 	err := s.goCompiler.CompileProgram()
 	if err != nil {
+		// Log the compilation error so it's visible in TUI
+		s.handler.log(err.Error())
 		return errors.Join(e, err)
 	}
 
 	// RUN
 	err = s.goRun.RunProgram()
 	if err != nil {
+		// Log the run error so it's visible in TUI
+		s.handler.log(err.Error())
 		return errors.Join(e, err)
 	}
 

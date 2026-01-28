@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -17,8 +18,12 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	tmp := t.TempDir()
 
 	// capture logs into a buffer
+	// capture logs into a buffer
 	var logMessages []string
+	var mu sync.Mutex
 	logger := func(messages ...any) {
+		mu.Lock()
+		defer mu.Unlock()
 		logMessages = append(logMessages, fmt.Sprint(messages...))
 	}
 
@@ -65,7 +70,9 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	}
 
 	// Verify the logs mention generation
+	mu.Lock()
 	out := strings.Join(logMessages, "\n")
+	mu.Unlock()
 	if !strings.Contains(out, "generate server from markdown") && !strings.Contains(out, "Generating server files") {
 		// CreateTemplateServer might log to progress channel instead of h.Logger for some steps
 		// But generateServerFromEmbeddedMarkdown uses h.Logger if set.
