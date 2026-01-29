@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -319,7 +318,7 @@ func (s *externalStrategy) startServer() error {
 	// Checks every 50ms until port is listening or 30s timeout
 	go func() {
 		if waitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
-			s.handler.log("Server is now accepting connections on port:", s.handler.AppPort)
+			//s.handler.log("Server is now accepting connections on port:", s.handler.AppPort)
 			// Trigger browser open only once
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
@@ -327,7 +326,7 @@ func (s *externalStrategy) startServer() error {
 				}
 			})
 		} else {
-			s.handler.log("Warning: Server may not be ready, port not responding after 30s")
+			s.handler.log("Error:", "Server port not responding after 30s")
 			// Try to open anyway on first attempt
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
@@ -337,7 +336,7 @@ func (s *externalStrategy) startServer() error {
 		}
 	}()
 
-	s.handler.log("Started:", path.Join(s.handler.SourceDir, s.handler.mainFileExternalServer), "Port:", s.handler.AppPort)
+	//s.handler.log("Started:", path.Join(s.handler.SourceDir, s.handler.mainFileExternalServer), "Port:", s.handler.AppPort)
 	return nil
 }
 
