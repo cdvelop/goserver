@@ -369,6 +369,20 @@ func (s *externalStrategy) Restart() error {
 		}
 		s.handler.log("External server restarted successfully")
 
+		// Ensure browser opens if this is the first successful start (e.g. if initial start failed due to restart)
+		// Signal when server is ready in a separate goroutine (non-blocking)
+		go func() {
+			if waitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
+				s.handler.openBrowserOnce.Do(func() {
+					if s.handler.OpenBrowser != nil {
+						s.handler.OpenBrowser(s.handler.AppPort, s.handler.Https)
+					}
+				})
+			} else {
+				s.handler.log("Error:", "Server port not responding after 30s")
+			}
+		}()
+
 		// Block until exit signal received
 		if s.handler.ExitChan != nil {
 			<-s.handler.ExitChan

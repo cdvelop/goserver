@@ -236,6 +236,19 @@ func (h *ServerHandler) log(messages ...any) {
 	}
 }
 
+// Restart restarts the server.
+// It delegates to the current strategy's Restart method.
+func (h *ServerHandler) Restart() error {
+	h.strategyMu.RLock()
+	defer h.strategyMu.RUnlock()
+
+	if h.strategy != nil {
+		h.log("Restarting server strategy:", h.strategy.Name())
+		return h.strategy.Restart()
+	}
+	return nil
+}
+
 // MainInputFileRelativePath returns the path relative to AppRootDir (e.g., "src/cmd/appserver/main.go")
 func (h *ServerHandler) MainInputFileRelativePath() string {
 	return filepath.Join(h.SourceDir, h.mainFileExternalServer)
