@@ -91,11 +91,23 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	}
 
 	// Signal that server is ready to accept connections and trigger browser open
-	s.handler.openBrowserOnce.Do(func() {
-		if s.handler.OpenBrowser != nil {
-			s.handler.OpenBrowser(s.handler.AppPort, false) // Internal server is always http
+	go func() {
+		// Wait max 5 seconds for the internal server to actually respond
+		if waitForPortListening(s.handler.AppPort, 5*time.Second, false) {
+			s.handler.openBrowserOnce.Do(func() {
+				if s.handler.OpenBrowser != nil {
+					s.handler.OpenBrowser(s.handler.AppPort, false) // Internal server is always http
+				}
+			})
+		} else {
+			s.handler.log("Warning: Internal Server port not responding, trying to open browser anyway...")
+			s.handler.openBrowserOnce.Do(func() {
+				if s.handler.OpenBrowser != nil {
+					s.handler.OpenBrowser(s.handler.AppPort, false)
+				}
+			})
 		}
-	})
+	}()
 
 	// Capture server instance to avoid race condition with Stop() setting s.server = nil
 	srv := s.server
@@ -155,6 +167,12 @@ func (s *internalStrategy) Restart() error {
 
 	// Note: We run Start in a goroutine because it blocks on ExitChan
 	go s.Start(nil)
+
+	// Wait for server to be ready before returning
+	// This prevents race conditions where browser reload is triggered before server is up
+	if !waitForPortListening(s.handler.AppPort, 5*time.Second, false) {
+		return errors.New("timeout waiting for internal server restart")
+	}
 	return nil
 }
 
@@ -242,7 +260,7 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 		CompilingArguments:        h.ArgumentsForCompilingServer,
 		OutFolderRelativePath:     filepath.Join(h.AppRootDir, h.OutputDir),
 		Logger:                    h.log,
-		Timeout:                   30 * time.Second,
+		Timeout:                   120 * time.Second,
 	})
 
 	runner := gorun.New(&gorun.Config{
@@ -361,7 +379,6 @@ func (s *externalStrategy) Restart() error {
 		return err
 	}
 
-	// Only start the program if compilation succeeded (run in goroutine to not block)
 	go func() {
 		if err := s.goRun.RunProgram(); err != nil {
 			s.handler.log("RunProgram failed:", err)
@@ -369,8 +386,9 @@ func (s *externalStrategy) Restart() error {
 		}
 		s.handler.log("External server restarted successfully")
 
-		// Ensure browser opens if this is the first successful start (e.g. if initial start failed due to restart)
-		// Signal when server is ready in a separate goroutine (non-blocking)
+		// Ensure browser opens if this is the first successful start
+		// We still keep the async waiter for the browser open logic just in case,
+		// but Restart() itself will now block below.
 		go func() {
 			if waitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
 				s.handler.openBrowserOnce.Do(func() {
@@ -378,8 +396,6 @@ func (s *externalStrategy) Restart() error {
 						s.handler.OpenBrowser(s.handler.AppPort, s.handler.Https)
 					}
 				})
-			} else {
-				s.handler.log("Error:", "Server port not responding after 30s")
 			}
 		}()
 
@@ -389,6 +405,13 @@ func (s *externalStrategy) Restart() error {
 		}
 		s.Stop()
 	}()
+
+	// Wait for server to be ready before returning
+	// This prevents race conditions where browser reload triggers before server is up
+	if !waitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
+		return errors.New("timeout waiting for external server restart")
+	}
+
 	return nil
 }
 
