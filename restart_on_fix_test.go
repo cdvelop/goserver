@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,11 +34,19 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 		t.Fatalf("creating output directory: %v", err)
 	}
 
+	// find a free port
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("getting free port: %v", err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+
 	cfg := &Config{
 		AppRootDir:           tmp,
 		SourceDir:            filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
 		OutputDir:            filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
-		AppPort:              "0",
+		AppPort:              fmt.Sprintf("%d", port),
 		ExitChan:             make(chan bool, 1),
 		DisableGlobalCleanup: true, // Prevent interference with other tests
 	}
@@ -45,7 +54,7 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 	serverFile := filepath.Join(sourceDir, "main.go")
 
 	// Initial correct content so the server starts
-	initialContent := `package main
+	initialContent := fmt.Sprintf(`package main
 
 import (
     "fmt"
@@ -58,8 +67,8 @@ func main() {
     http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintln(w, "VERSION_OK")
     })
-    log.Fatal(http.ListenAndServe(":0", nil))
-}`
+    log.Fatal(http.ListenAndServe(":%d", nil))
+}`, port)
 
 	if err := os.WriteFile(serverFile, []byte(initialContent), 0644); err != nil {
 		t.Fatalf("writing initial server file: %v", err)
@@ -78,7 +87,7 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// Now write a broken version (compile error)
-	broken := `package main
+	broken := fmt.Sprintf(`package main
 
 import (
     "fmt"
@@ -91,15 +100,15 @@ func main() {
     http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintln(w, "BROKEN")
     })
-    log.Fatal(http.ListenAndServe(":0", nil))
-}`
+    log.Fatal(http.ListenAndServe(":%d", nil))
+}`, port)
 
 	if err := os.WriteFile(serverFile, []byte(broken), 0644); err != nil {
 		t.Fatalf("writing broken server file: %v", err)
 	}
 
 	// Trigger file event - this should attempt restart and fail due to compile error
-	err := handler.NewFileEvent("main.go", "go", serverFile, "write")
+	err = handler.NewFileEvent("main.go", "go", serverFile, "write")
 	if err == nil {
 		t.Fatalf("expected error when restarting with broken code, got nil")
 	}
@@ -108,7 +117,7 @@ func main() {
 	time.Sleep(200 * time.Millisecond)
 
 	// Now fix the file
-	fixed := `package main
+	fixed := fmt.Sprintf(`package main
 
 import (
     "fmt"
@@ -121,8 +130,8 @@ func main() {
     http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintln(w, "VERSION_FIXED")
     })
-    log.Fatal(http.ListenAndServe(":0", nil))
-}`
+    log.Fatal(http.ListenAndServe(":%d", nil))
+}`, port)
 
 	if err := os.WriteFile(serverFile, []byte(fixed), 0644); err != nil {
 		t.Fatalf("writing fixed server file: %v", err)
