@@ -262,24 +262,6 @@ func (h *ServerHandler) UnobservedFiles() []string {
 	return []string{}
 }
 
-// serverFileWasModified returns true if the external server file
-// has been modified from the original template
-func (h *ServerHandler) serverFileWasModified() bool {
-	targetPath := filepath.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)
-
-	currentContent, err := os.ReadFile(targetPath)
-	if err != nil {
-		return false // File doesn't exist, not modified from some original (it's missing)
-	}
-
-	expectedContent, err := h.getExpectedServerContent()
-	if err != nil {
-		return true // Can't generate expectedContent, assume modified/customized
-	}
-
-	return string(currentContent) != expectedContent
-}
-
 // SetExternalServerMode switches between Internal and External server strategies.
 // When switching to External, it also:
 // 1. Generates server template files if they don't exist
