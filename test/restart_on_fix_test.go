@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"fmt"
@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tinywasm/server"
 )
 
 // Test that when a write produces a compilation error, fixing the file and
@@ -42,7 +44,7 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 
-	cfg := &Config{
+	cfg := &server.Config{
 		AppRootDir:           tmp,
 		SourceDir:            filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
 		OutputDir:            filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
@@ -74,7 +76,7 @@ func main() {
 		t.Fatalf("writing initial server file: %v", err)
 	}
 
-	handler := New(cfg)
+	handler := server.New(cfg)
 	handler.SetLog(logger)
 	if err := handler.SetExternalServerMode(true); err != nil {
 		t.Fatalf("failed to set external server mode: %v", err)

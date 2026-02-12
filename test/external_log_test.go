@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"os"
@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tinywasm/server"
 )
 
 // TestExternalStrategyLogsAreVisible verifies that logs from gobuild and gorun
@@ -27,7 +29,7 @@ func TestExternalStrategyLogsAreVisible(t *testing.T) {
 	}
 
 	// Create handler WITHOUT Logger in config (simulates app/section-build.go)
-	cfg := &Config{
+	cfg := &server.Config{
 		AppRootDir:           tmpDir,
 		SourceDir:            sourceDir,
 		OutputDir:            outputDir,
@@ -36,7 +38,7 @@ func TestExternalStrategyLogsAreVisible(t *testing.T) {
 		ExitChan:             make(chan bool),
 		DisableGlobalCleanup: true,
 	}
-	h := New(cfg)
+	h := server.New(cfg)
 
 	// Create a server file with a syntax error to trigger a build failure
 	// We do this AFTER New() to ensure we start in Internal mode, so
@@ -125,7 +127,7 @@ func TestExternalStrategyRuntimeErrorLogsAreVisible(t *testing.T) {
 	}
 
 	// Create handler WITHOUT Logger in config (simulates app/section-build.go)
-	cfg := &Config{
+	cfg := &server.Config{
 		AppRootDir:           tmpDir,
 		SourceDir:            sourceDir,
 		OutputDir:            outputDir,
@@ -134,7 +136,7 @@ func TestExternalStrategyRuntimeErrorLogsAreVisible(t *testing.T) {
 		ExitChan:             make(chan bool),
 		DisableGlobalCleanup: true,
 	}
-	h := New(cfg)
+	h := server.New(cfg)
 
 	// Create a server file that compiles but prints an error and exits
 	// We do this AFTER New() to ensure we start in Internal mode
