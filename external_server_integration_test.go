@@ -19,7 +19,6 @@ import (
 // Test that the generated external server can be built and responds on /health.
 // This is a slow integration test and is skipped by default.
 func TestGeneratedServerStartsAndResponds(t *testing.T) {
-	t.Skip("integration test - enable manually")
 
 	tmp := t.TempDir()
 
@@ -71,10 +70,15 @@ func TestGeneratedServerStartsAndResponds(t *testing.T) {
 	if err := h.SetExternalServerMode(true); err != nil {
 		t.Fatalf("failed to set external server mode: %v", err)
 	}
-	h.StartServer(nil) // This should generate and start
+	go h.StartServer(nil) // Start blocking server in goroutine
 
-	// ensure we kill the process at the end via StopServer
+	// ensure we kill the process at the end via StopServer and unblock StartServer
 	t.Cleanup(func() {
+		// Signal StartServer to exit
+		select {
+		case h.ExitChan <- true:
+		default:
+		}
 		h.StopServer()
 	})
 
