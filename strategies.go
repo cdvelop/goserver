@@ -54,7 +54,6 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 		return nil
 	}
 	s.running = true
-	s.mu.Unlock()
 
 	// WaitGroup Done is handled at the end of this function (blocking until exit)
 
@@ -76,6 +75,7 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 		Addr:    ":" + s.handler.AppPort,
 		Handler: mux,
 	}
+	s.mu.Unlock()
 
 	s.handler.log("Starting Internal Server on port:", s.handler.AppPort)
 
@@ -83,7 +83,10 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	ln, err := net.Listen("tcp", ":"+s.handler.AppPort)
 	if err != nil {
 		s.handler.log("Internal Server listen error:", err)
+		s.mu.Lock()
 		s.running = false
+		s.server = nil
+		s.mu.Unlock()
 		if wg != nil {
 			wg.Done()
 		}
