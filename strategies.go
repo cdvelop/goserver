@@ -96,7 +96,7 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	// Signal that server is ready to accept connections and trigger browser open
 	go func() {
 		// Wait max 5 seconds for the internal server to actually respond
-		if waitForPortListening(s.handler.AppPort, 5*time.Second, false) {
+		if WaitForPortListening(s.handler.AppPort, 5*time.Second, false) {
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
 					s.handler.OpenBrowser(s.handler.AppPort, false) // Internal server is always http
@@ -173,7 +173,7 @@ func (s *internalStrategy) Restart() error {
 
 	// Wait for server to be ready before returning
 	// This prevents race conditions where browser reload is triggered before server is up
-	if !waitForPortListening(s.handler.AppPort, 5*time.Second, false) {
+	if !WaitForPortListening(s.handler.AppPort, 5*time.Second, false) {
 		return errors.New("timeout waiting for internal server restart")
 	}
 	return nil
@@ -192,8 +192,8 @@ func waitForPortFree(port string) {
 	}
 }
 
-// waitForPortListening waits until the port is accepting HTTP or HTTPS connections (server is ready)
-func waitForPortListening(port string, timeout time.Duration, https bool) bool {
+// WaitForPortListening waits until the port is accepting HTTP or HTTPS connections (server is ready)
+func WaitForPortListening(port string, timeout time.Duration, https bool) bool {
 	// Use 127.0.0.1 to force IPv4, avoiding issues where localhost resolves to [::1] (IPv6)
 	// but the server is listening on IPv4 only.
 	scheme := "http"
@@ -338,7 +338,7 @@ func (s *externalStrategy) startServer() error {
 	// Signal when server is ready in a separate goroutine (non-blocking)
 	// Checks every 50ms until port is listening or 30s timeout
 	go func() {
-		if waitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
+		if WaitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
 			//s.handler.log("Server is now accepting connections on port:", s.handler.AppPort)
 			// Trigger browser open only once
 			s.handler.openBrowserOnce.Do(func() {
@@ -393,7 +393,7 @@ func (s *externalStrategy) Restart() error {
 		// We still keep the async waiter for the browser open logic just in case,
 		// but Restart() itself will now block below.
 		go func() {
-			if waitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
+			if WaitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
 				s.handler.openBrowserOnce.Do(func() {
 					if s.handler.OpenBrowser != nil {
 						s.handler.OpenBrowser(s.handler.AppPort, s.handler.Https)
@@ -411,7 +411,7 @@ func (s *externalStrategy) Restart() error {
 
 	// Wait for server to be ready before returning
 	// This prevents race conditions where browser reload triggers before server is up
-	if !waitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
+	if !WaitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
 		return errors.New("timeout waiting for external server restart")
 	}
 

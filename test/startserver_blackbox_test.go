@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tinywasm/server"
 )
 
 // This test verifies that calling CreateTemplateServer generates the external server file
@@ -32,7 +34,7 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	// Pre-fill exit channel so Start() doesn't block waiting
 	exitChan <- true
 
-	cfg := &Config{
+	cfg := &server.Config{
 		AppRootDir:           tmp,
 		SourceDir:            "src/app",
 		OutputDir:            "deploy",
@@ -41,7 +43,7 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 		DisableGlobalCleanup: true,
 	}
 
-	h := New(cfg)
+	h := server.New(cfg)
 	h.SetLog(logger)
 
 	// Ensure external file doesn't exist initially
@@ -51,7 +53,7 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	}
 
 	// Verify we are in Internal mode
-	if !h.executionInternal {
+	if strings.Contains(h.Value(), "External:T") {
 		t.Fatal("Expected Internal mode initially")
 	}
 
@@ -127,7 +129,7 @@ Found:
 		// So h.executionInternal should be false even if Start fails.
 	}
 
-	if h.executionInternal {
+	if !strings.Contains(h.Value(), "External:T") {
 		t.Error("Expected to be in External mode logic (h.executionInternal = false) even if compilation failed")
 	}
 }

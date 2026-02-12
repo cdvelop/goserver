@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"net/http"
@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tinywasm/server"
 )
 
 func TestWaitForPortListening_HTTPS(t *testing.T) {
@@ -20,10 +22,10 @@ func TestWaitForPortListening_HTTPS(t *testing.T) {
 	parts := strings.Split(ts.URL, ":")
 	port := parts[len(parts)-1]
 
-	// Test if waitForPortListening can connect to it using HTTPS
-	success := waitForPortListening(port, 2*time.Second, true)
+	// Test if WaitForPortListening can connect to it using HTTPS
+	success := server.WaitForPortListening(port, 2*time.Second, true)
 	if !success {
-		t.Errorf("waitForPortListening failed to connect to mock HTTPS server on port %s (URL: %s)", port, ts.URL)
+		t.Errorf("WaitForPortListening failed to connect to mock HTTPS server on port %s (URL: %s)", port, ts.URL)
 	}
 }
 
@@ -38,9 +40,9 @@ func TestWaitForPortListening_HTTP(t *testing.T) {
 	parts := strings.Split(ts.URL, ":")
 	port := parts[len(parts)-1]
 
-	// Test if waitForPortListening can connect to it using HTTP
-	success := waitForPortListening(port, 2*time.Second, false)
+	// Test if WaitForPortListening can connect to it using HTTP
+	success := server.WaitForPortListening(port, 2*time.Second, false)
 	if !success {
-		t.Errorf("waitForPortListening failed to connect to mock HTTP server on port %s (URL: %s)", port, ts.URL)
+		t.Errorf("WaitForPortListening failed to connect to mock HTTP server on port %s (URL: %s)", port, ts.URL)
 	}
 }
