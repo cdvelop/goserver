@@ -131,7 +131,15 @@ func main() {
 	if err := h.SetExternalServerMode(true); err != nil {
 		t.Fatalf("failed to set external server mode: %v", err)
 	} // Ensure it uses gorun
-	h.StartServer(nil)
+	go h.StartServer(nil)
+
+	t.Cleanup(func() {
+		select {
+		case h.ExitChan <- true:
+		default:
+		}
+		h.StopServer()
+	})
 
 	// Wait and verify server responds
 	client := &http.Client{Timeout: 2 * time.Second}

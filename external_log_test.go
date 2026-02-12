@@ -71,6 +71,8 @@ func main() {
 		t.Logf("SetExternalServerMode returned error (expected): %v", err)
 	}
 
+	t.Logf("PATH env: %s", os.Getenv("PATH"))
+
 	// Wait for logs to appear (polling) instead of fixed sleep
 	deadline := time.Now().Add(3 * time.Second)
 	found := false

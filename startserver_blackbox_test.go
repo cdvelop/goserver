@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // This test verifies that calling CreateTemplateServer generates the external server file
@@ -58,7 +59,47 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	// Since CreateTemplateServer tries to compile, and we might not have a full Go env for the generated code
 	// (depending on dependencies), it might return an error.
 	// We primarily care that it generated the file.
-	err := h.CreateTemplateServer()
+	// Call CreateTemplateServer in a goroutine because it blocks until the server exits
+	// (or until Start returns if ExitChan is signaled)
+	var err error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err = h.CreateTemplateServer()
+	}()
+
+	// Give it some time to generate files and start blocking
+	// We can loop checking for the file
+	timeout := time.After(5 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	fileFound := false
+	for {
+		select {
+		case <-timeout:
+			break // break loop, check fileFound later
+		case <-ticker.C:
+			if _, statErr := os.Stat(target); statErr == nil {
+				fileFound = true
+				goto Found
+			}
+		}
+	}
+Found:
+
+	if !fileFound {
+		t.Fatalf("expected generated server file at %s, but not found within timeout", target)
+	}
+
+	// Signal to exit
+	select {
+	case h.ExitChan <- true:
+	default:
+	}
+
+	wg.Wait()
 
 	if err != nil && t.Failed() {
 		t.Logf("CreateTemplateServer returned error: %v", err)

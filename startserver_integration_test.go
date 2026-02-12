@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,7 +36,10 @@ func TestStartServerRunsGeneratedServerAndResponds(t *testing.T) {
 	l.Close()
 
 	var logBuf bytes.Buffer
+	var mu sync.Mutex
 	logger := func(messages ...any) {
+		mu.Lock()
+		defer mu.Unlock()
 		fmt.Fprintln(&logBuf, messages...)
 	}
 
@@ -115,6 +119,10 @@ go 1.20
 				}
 
 				// success: signal server to exit via StopServer
+				select {
+				case h.ExitChan <- true:
+				default:
+				}
 				h.StopServer()
 				return
 			}
