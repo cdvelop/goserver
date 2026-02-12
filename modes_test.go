@@ -31,7 +31,6 @@ func TestServerHandler_Value(t *testing.T) {
 
 	// Case 2: Modified state
 	h.executionInternal = false
-	h.compilationOnDisk = true
 	if got := h.Value(); got != "Execution External:T" {
 		t.Errorf("modified Value() = %q", got)
 	}
@@ -152,19 +151,6 @@ func TestSetExternalServerMode_BlocksInternal_WhenModified(t *testing.T) {
 	// The specific error message about "customized" is gone, replaced by the generic block
 	if !strings.Contains(err.Error(), "cannot switch back") {
 		t.Errorf("expected error message to mention 'cannot switch back', got: %v", err)
-	}
-}
-
-func TestSetCompilationOnDisk(t *testing.T) {
-	h := New(nil)
-
-	if h.compilationOnDisk {
-		t.Fatal("expected default compilationOnDisk to be false")
-	}
-
-	h.SetCompilationOnDisk(true)
-	if !h.compilationOnDisk {
-		t.Fatal("expected compilationOnDisk to be true after setting")
 	}
 }
 

@@ -22,10 +22,9 @@ type UI interface {
 }
 
 const (
-	StoreKeyExternalServer    = "server_external_mode"
-	StoreKeyCompilationOnDisk = "server_compilation_ondisk"
-	EnvKeyServerPort          = "SERVER_PORT"
-	EnvKeyServerHttps         = "SERVER_HTTPS"
+	StoreKeyExternalServer = "server_external_mode"
+	EnvKeyServerPort       = "SERVER_PORT"
+	EnvKeyServerHttps      = "SERVER_HTTPS"
 )
 
 // TestMode is a global flag to indicate the server is running in a test environment.
@@ -47,7 +46,6 @@ type ServerHandler struct {
 	strategy               ServerStrategy
 	strategyMu             sync.RWMutex // protects strategy field
 	executionInternal      bool         // true = embedded server (internal), false = external process
-	compilationOnDisk      bool         // true = artifacts to disk, false = in-memory
 	onLog                  func(message ...any)
 	openBrowserOnce        sync.Once
 }
@@ -168,10 +166,6 @@ func New(c *Config) *ServerHandler {
 		_ = sh.Store.Set(StoreKeyExternalServer, "true")
 	}
 
-	if val, err := sh.Store.Get(StoreKeyCompilationOnDisk); err == nil && val == "true" {
-		sh.compilationOnDisk = true
-	}
-
 	return sh
 }
 
@@ -284,17 +278,6 @@ func (h *ServerHandler) serverFileWasModified() bool {
 	}
 
 	return string(currentContent) != expectedContent
-}
-
-// SetCompilationOnDisk sets whether the server artifacts should be written to disk.
-func (h *ServerHandler) SetCompilationOnDisk(onDisk bool) {
-	h.compilationOnDisk = onDisk
-	_ = h.Store.Set(StoreKeyCompilationOnDisk, map[bool]string{true: "true", false: "false"}[onDisk])
-
-	// If we are in external mode, it will compile to disk on Start/Restart
-	if !h.executionInternal {
-		h.log("Server Compilation mode set to:", map[bool]string{true: "OnDisk", false: "InMemory"}[onDisk])
-	}
 }
 
 // SetExternalServerMode switches between Internal and External server strategies.
