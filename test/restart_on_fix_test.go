@@ -44,14 +44,7 @@ func TestNewFileEvent_RestartsAfterFix(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 
-	cfg := &server.Config{
-		AppRootDir:           tmp,
-		SourceDir:            filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
-		OutputDir:            filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
-		AppPort:              fmt.Sprintf("%d", port),
-		ExitChan:             make(chan bool, 1),
-		DisableGlobalCleanup: true, // Prevent interference with other tests
-	}
+	exitChan := make(chan bool, 1)
 
 	serverFile := filepath.Join(sourceDir, "main.go")
 
@@ -76,8 +69,15 @@ func main() {
 		t.Fatalf("writing initial server file: %v", err)
 	}
 
-	handler := server.New(cfg)
-	handler.SetLog(logger)
+	handler := server.New().
+		SetAppRootDir(tmp).
+		SetSourceDir(filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator)))).
+		SetOutputDir(filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator)))).
+		SetPort(fmt.Sprintf("%d", port)).
+		SetExitChan(exitChan).
+		SetDisableGlobalCleanup(true).
+		SetLogger(logger)
+
 	if err := handler.SetExternalServerMode(true); err != nil {
 		t.Fatalf("failed to set external server mode: %v", err)
 	}
@@ -156,7 +156,7 @@ func main() {
 	}
 
 	// Stop server
-	cfg.ExitChan <- true
+	exitChan <- true
 	time.Sleep(100 * time.Millisecond)
 }
 

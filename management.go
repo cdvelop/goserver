@@ -2,12 +2,27 @@ package server
 
 import (
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
 // StartServer initiates the server using the current strategy (In-Memory or External)
 func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
+	// Check if external server file exists and switch if needed
+	serverFilePath := filepath.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)
+	if _, err := os.Stat(serverFilePath); err == nil && h.executionInternal {
+		// Only log if we are actually switching mode due to file presence
+		h.log("Found existing server file, switching to External Server Mode")
+		h.executionInternal = false
+		h.strategy = newExternalStrategy(h)
+		// Update store to reflect the state
+		if h.Store != nil {
+			_ = h.Store.Set(StoreKeyExternalServer, "true")
+		}
+	}
+
 	// Notify external systems before starting (e.g., switch client/assets to disk mode)
 	h.OnExternalModeExecution(!h.executionInternal)
 

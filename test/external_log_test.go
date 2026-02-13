@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,16 +30,15 @@ func TestExternalStrategyLogsAreVisible(t *testing.T) {
 	}
 
 	// Create handler WITHOUT Logger in config (simulates app/section-build.go)
-	cfg := &server.Config{
-		AppRootDir:           tmpDir,
-		SourceDir:            sourceDir,
-		OutputDir:            outputDir,
-		MainInputFile:        "main.go",
-		AppPort:              "19090",
-		ExitChan:             make(chan bool),
-		DisableGlobalCleanup: true,
-	}
-	h := server.New(cfg)
+	exitChan := make(chan bool)
+	h := server.New().
+		SetAppRootDir(tmpDir).
+		SetSourceDir(sourceDir).
+		SetOutputDir(outputDir).
+		SetMainInputFile("main.go").
+		SetPort("19090").
+		SetExitChan(exitChan).
+		SetDisableGlobalCleanup(true)
 
 	// Create a server file with a syntax error to trigger a build failure
 	// We do this AFTER New() to ensure we start in Internal mode, so
@@ -56,14 +56,20 @@ func main() {
 		t.Fatalf("writing server file: %v", err)
 	}
 
-	// Capture logs AFTER handler creation (simulates TUI calling SetLog later)
+	// Capture logs AFTER handler creation (simulates TUI calling SetLogger later)
 	var logs []string
 	var logsMu sync.Mutex
-	h.SetLog(func(msgs ...any) {
+	h.SetLogger(func(msgs ...any) {
 		logsMu.Lock()
 		defer logsMu.Unlock()
 		for _, m := range msgs {
-			logs = append(logs, strings.TrimSpace(m.(string)))
+			// type assertion panic fix
+			if s, ok := m.(string); ok {
+				logs = append(logs, strings.TrimSpace(s))
+			} else {
+				// handle non-string messages (e.g. error)
+				logs = append(logs, fmt.Sprint(m))
+			}
 		}
 	})
 
@@ -95,7 +101,7 @@ func main() {
 	}
 
 	// Close exit channel to cleanup
-	close(cfg.ExitChan)
+	close(exitChan)
 
 	// Check that the compilation error was logged
 	logsMu.Lock()
@@ -127,16 +133,15 @@ func TestExternalStrategyRuntimeErrorLogsAreVisible(t *testing.T) {
 	}
 
 	// Create handler WITHOUT Logger in config (simulates app/section-build.go)
-	cfg := &server.Config{
-		AppRootDir:           tmpDir,
-		SourceDir:            sourceDir,
-		OutputDir:            outputDir,
-		MainInputFile:        "main.go",
-		AppPort:              "19091",
-		ExitChan:             make(chan bool),
-		DisableGlobalCleanup: true,
-	}
-	h := server.New(cfg)
+	exitChan := make(chan bool)
+	h := server.New().
+		SetAppRootDir(tmpDir).
+		SetSourceDir(sourceDir).
+		SetOutputDir(outputDir).
+		SetMainInputFile("main.go").
+		SetPort("19091").
+		SetExitChan(exitChan).
+		SetDisableGlobalCleanup(true)
 
 	// Create a server file that compiles but prints an error and exits
 	// We do this AFTER New() to ensure we start in Internal mode
@@ -157,10 +162,10 @@ func main() {
 		t.Fatalf("writing server file: %v", err)
 	}
 
-	// Capture logs AFTER handler creation (simulates TUI calling SetLog later)
+	// Capture logs AFTER handler creation (simulates TUI calling SetLogger later)
 	var logs []string
 	var logsMu sync.Mutex
-	h.SetLog(func(msgs ...any) {
+	h.SetLogger(func(msgs ...any) {
 		logsMu.Lock()
 		defer logsMu.Unlock()
 		for _, m := range msgs {
@@ -195,7 +200,7 @@ func main() {
 	}
 
 	// Close exit channel to cleanup
-	close(cfg.ExitChan)
+	close(exitChan)
 	time.Sleep(100 * time.Millisecond)
 
 	// Check that the runtime error was logged

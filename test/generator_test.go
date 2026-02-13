@@ -11,15 +11,13 @@ import (
 
 func newTestHandler(t *testing.T, sourceDir, outputDir, appRootDir string) *server.ServerHandler {
 	t.Helper()
-	cfg := &server.Config{
-		AppRootDir: appRootDir,
-		SourceDir:  sourceDir,
-		OutputDir:  outputDir,
-		AppPort:    "9090",
-		ExitChan:   make(chan bool, 10),
-	}
-	h := server.New(cfg)
-	h.SetLog(t.Log)
+	h := server.New().
+		SetAppRootDir(appRootDir).
+		SetSourceDir(sourceDir).
+		SetOutputDir(outputDir).
+		SetPort("9090").
+		SetExitChan(make(chan bool, 10)).
+		SetLogger(t.Log)
 	return h
 }
 

@@ -59,8 +59,8 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 
 	mux := http.NewServeMux()
 
-	if len(s.handler.Routes) > 0 {
-		for _, registerConfig := range s.handler.Routes {
+	if len(s.handler.routes) > 0 {
+		for _, registerConfig := range s.handler.routes {
 			registerConfig(mux)
 		}
 	} else {

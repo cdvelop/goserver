@@ -21,8 +21,9 @@ func (h *ServerHandler) Value() string {
 }
 
 // Change implements HandlerEdit.Change
-func (h *ServerHandler) Change(newValue string) {
+func (h *ServerHandler) Change(newValue string) error {
 	pairs := fmt.Convert(newValue).Split(",")
+	var lastErr error
 
 	for _, pair := range pairs {
 		// e.g., pair = "Execution External:T" or " Build OnDisk:F"
@@ -40,11 +41,13 @@ func (h *ServerHandler) Change(newValue string) {
 		case "Execution External":
 			if err := h.SetExternalServerMode(isTrue); err != nil {
 				h.log("Mode change error:", err)
+				lastErr = err
 			}
 		}
 	}
 
 	h.RefreshUI()
+	return lastErr
 }
 
 func (h *ServerHandler) RefreshUI() {

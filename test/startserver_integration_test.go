@@ -71,17 +71,14 @@ go 1.20
 		t.Fatalf("creating go.mod: %v", err)
 	}
 
-	cfg := &server.Config{
-		AppRootDir: tmp,
-		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
-		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
-		PublicDir:  publicDir,
-		AppPort:    fmt.Sprintf("%d", port),
-		ExitChan:   make(chan bool, 1),
-	}
-
-	h := server.New(cfg)
-	h.SetLog(logger)
+	h := server.New().
+		SetAppRootDir(tmp).
+		SetSourceDir(filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator)))).
+		SetOutputDir(filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator)))).
+		SetPublicDir(publicDir).
+		SetPort(fmt.Sprintf("%d", port)).
+		SetExitChan(make(chan bool, 1)).
+		SetLogger(logger)
 
 	// Ensure external file absent initially
 	target := filepath.Join(tmp, h.MainInputFileRelativePath())
