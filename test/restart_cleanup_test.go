@@ -116,16 +116,13 @@ func main() {
 		t.Fatalf("creating main.go: %v", err)
 	}
 
-	serverConfig := &server.Config{
-		AppRootDir: tmp,
-		SourceDir:  filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))),
-		OutputDir:  filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))),
-		AppPort:    fmt.Sprintf("%d", port),
-		ExitChan:   make(chan bool),
-	}
-
-	h := server.New(serverConfig)
-	h.SetLog(t.Log)
+	h := server.New().
+		SetAppRootDir(tmp).
+		SetSourceDir(filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator)))).
+		SetOutputDir(filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator)))).
+		SetPort(fmt.Sprintf("%d", port)).
+		SetExitChan(make(chan bool)).
+		SetLogger(t.Log)
 
 	// Test 1: Initial start
 	if err := h.SetExternalServerMode(true); err != nil {

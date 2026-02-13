@@ -3,10 +3,26 @@ package server
 import (
 	"errors"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sync"
 )
+
+// NOTE: circular dep prevents importing app — mirror the interface locally.
+var _ serverInterface = (*ServerHandler)(nil)
+
+type serverInterface interface {
+	StartServer(wg *sync.WaitGroup)
+	StopServer() error
+	RestartServer() error
+	NewFileEvent(fileName, extension, filePath, event string) error
+	UnobservedFiles() []string
+	SupportedExtensions() []string
+	Name() string
+	Label() string
+	Value() string
+	Change(v string) error
+	RefreshUI()
+}
 
 // Store defines the minimal interface for persistent storage
 type Store interface {
@@ -46,6 +62,9 @@ type ServerHandler struct {
 	executionInternal      bool         // true = embedded server (internal), false = external process
 	onLog                  func(message ...any)
 	openBrowserOnce        sync.Once
+
+	// Internal route list
+	routes []func(*http.ServeMux)
 }
 
 type Config struct {
@@ -56,9 +75,8 @@ type Config struct {
 	MainInputFile               string                 // main input file name (default: "main.go", can be "server.go", etc.)
 	ArgumentsForCompilingServer func() []string        // e.g., []string{"-X 'main.version=v1.0.0'"}
 	ArgumentsToRunServer        func() []string        // e.g., []string{"dev"}
-	AppPort                     string                 // e.g., 8080
+	AppPort                     string                 // e.g., 6060
 	Https                       bool                   // true if HTTPS is enabled
-	Routes                      []func(*http.ServeMux) // Functions to register routes on the HTTP server
 	DisableGlobalCleanup        bool                   // If true, disables global cleanup in gorun during restarts
 	Logger                      func(message ...any)   // Logger function
 	ExitChan                    chan bool              // Global channel to signal shutdown
@@ -69,106 +87,155 @@ type Config struct {
 	GitIgnoreAdd                func(entry string) error // Callback to add entries to .gitignore
 }
 
-// NewConfig provides a default configuration.
-func NewConfig() *Config {
-	return &Config{
-		AppRootDir:    ".",
-		SourceDir:     "web",
-		OutputDir:     "web",
-		PublicDir:     "web/public",
-		MainInputFile: "main.go", // Default convention
-		AppPort:       "8080",
-		Routes:        nil,
-		Logger:        nil,
-		ExitChan:      make(chan bool),
-	}
-}
-
-func New(c *Config) *ServerHandler {
-	// Accept nil and fill missing fields with defaults to avoid panics when caller
-	// provides a partially populated Config.
-	dc := NewConfig() // default config
-
-	if c == nil {
-		c = dc
-	} else {
-		// Fill zero-value fields with defaults to be defensive
-		if c.AppRootDir == "" {
-			c.AppRootDir = dc.AppRootDir
-		}
-		if c.SourceDir == "" {
-			c.SourceDir = dc.SourceDir
-		}
-		if c.OutputDir == "" {
-			c.OutputDir = dc.OutputDir
-		}
-		if c.PublicDir == "" {
-			c.PublicDir = dc.PublicDir
-		}
-		if c.MainInputFile == "" {
-			c.MainInputFile = dc.MainInputFile
-		}
-		if c.AppPort == "" {
-			c.AppPort = dc.AppPort
-		}
-		if c.ExitChan == nil {
-			c.ExitChan = make(chan bool)
-		}
-		if c.ArgumentsForCompilingServer == nil {
-			c.ArgumentsForCompilingServer = func() []string { return nil }
-		}
-		if c.ArgumentsToRunServer == nil {
-			c.ArgumentsToRunServer = func() []string { return nil }
-		}
-		if c.OnExternalModeExecution == nil {
-			c.OnExternalModeExecution = func(bool) {}
-		}
-		if c.GitIgnoreAdd == nil {
-			c.GitIgnoreAdd = func(string) error { return nil }
-		}
+// New creates a new ServerHandler with default configuration.
+func New() *ServerHandler {
+	c := &Config{
+		AppRootDir:                  ".",
+		SourceDir:                   "web",
+		OutputDir:                   "web",
+		PublicDir:                   "web/public",
+		MainInputFile:               "main.go",
+		AppPort:                     "6060",
+		Logger:                      nil,
+		ExitChan:                    make(chan bool),
+		ArgumentsForCompilingServer: func() []string { return nil },
+		ArgumentsToRunServer:        func() []string { return nil },
+		OnExternalModeExecution:     func(bool) {},
+		GitIgnoreAdd:                func(string) error { return nil },
 	}
 
 	sh := &ServerHandler{
 		Config:                 c,
-		mainFileExternalServer: c.MainInputFile, // Use configured file name
+		mainFileExternalServer: c.MainInputFile,
 		onLog:                  c.Logger,
+		routes:                 make([]func(*http.ServeMux), 0),
 	}
 
-	if sh.Store == nil {
-		sh.Store = noopStore{}
-	}
-	if sh.UI == nil {
-		sh.UI = noopUI{}
-	}
+	sh.Store = noopStore{}
+	sh.UI = noopUI{}
 
 	// Default to Internal Execution Mode
 	sh.executionInternal = true
 	sh.strategy = newInternalStrategy(sh)
 
-	// Load persisted states
-	if val, err := sh.Store.Get(StoreKeyExternalServer); err == nil && val == "true" {
-		sh.executionInternal = false
-		sh.strategy = newExternalStrategy(sh)
-	}
-
-	// If a custom server file exists, it takes precedence over default configuration
-	serverFilePath := filepath.Join(sh.AppRootDir, sh.SourceDir, sh.mainFileExternalServer)
-	if _, err := os.Stat(serverFilePath); err == nil && sh.executionInternal {
-		// Only log if we are actually switching mode due to file presence
-		if sh.onLog != nil {
-			sh.onLog("Found existing server file, switching to External Server Mode")
-		}
-		sh.executionInternal = false
-		sh.strategy = newExternalStrategy(sh)
-		// Update store to reflect the state
-		_ = sh.Store.Set(StoreKeyExternalServer, "true")
-	}
-
 	return sh
 }
 
-func (h *ServerHandler) SetLog(f func(message ...any)) {
-	h.onLog = f
+// SetAppRootDir sets the application root directory
+func (h *ServerHandler) SetAppRootDir(dir string) *ServerHandler {
+	h.Config.AppRootDir = dir
+	return h
+}
+
+// SetSourceDir sets the source directory relative to AppRootDir
+func (h *ServerHandler) SetSourceDir(dir string) *ServerHandler {
+	h.Config.SourceDir = dir
+	return h
+}
+
+// SetOutputDir sets the output directory relative to AppRootDir
+func (h *ServerHandler) SetOutputDir(dir string) *ServerHandler {
+	h.Config.OutputDir = dir
+	return h
+}
+
+// SetPublicDir sets the public directory
+func (h *ServerHandler) SetPublicDir(dir string) *ServerHandler {
+	h.Config.PublicDir = dir
+	return h
+}
+
+// SetMainInputFile sets the main input file name
+func (h *ServerHandler) SetMainInputFile(name string) *ServerHandler {
+	h.Config.MainInputFile = name
+	h.mainFileExternalServer = name
+	return h
+}
+
+// SetPort sets the server port
+func (h *ServerHandler) SetPort(port string) *ServerHandler {
+	h.Config.AppPort = port
+	return h
+}
+
+// SetHTTPS enables or disables HTTPS
+func (h *ServerHandler) SetHTTPS(enabled bool) *ServerHandler {
+	h.Config.Https = enabled
+	return h
+}
+
+// SetLogger sets the logger function
+func (h *ServerHandler) SetLogger(fn func(...any)) *ServerHandler {
+	h.Config.Logger = fn
+	h.onLog = fn
+	return h
+}
+
+// SetExitChan sets the exit channel
+func (h *ServerHandler) SetExitChan(ch chan bool) *ServerHandler {
+	h.Config.ExitChan = ch
+	return h
+}
+
+// SetOpenBrowser sets the open browser function
+func (h *ServerHandler) SetOpenBrowser(fn func(port string, https bool)) *ServerHandler {
+	h.Config.OpenBrowser = fn
+	return h
+}
+
+// SetStore sets the persistent store
+func (h *ServerHandler) SetStore(s Store) *ServerHandler {
+	if s != nil {
+		h.Config.Store = s
+		h.Store = s
+	}
+	return h
+}
+
+// SetUI sets the UI interface
+func (h *ServerHandler) SetUI(ui UI) *ServerHandler {
+	if ui != nil {
+		h.Config.UI = ui
+		h.UI = ui
+	}
+	return h
+}
+
+// SetOnExternalModeExecution sets the callback for external mode execution
+func (h *ServerHandler) SetOnExternalModeExecution(fn func(bool)) *ServerHandler {
+	h.Config.OnExternalModeExecution = fn
+	return h
+}
+
+// SetGitIgnoreAdd sets the callback to add entries to .gitignore
+func (h *ServerHandler) SetGitIgnoreAdd(fn func(string) error) *ServerHandler {
+	h.Config.GitIgnoreAdd = fn
+	return h
+}
+
+// SetCompileArgs sets the arguments for compiling the server
+func (h *ServerHandler) SetCompileArgs(fn func() []string) *ServerHandler {
+	h.Config.ArgumentsForCompilingServer = fn
+	return h
+}
+
+// SetRunArgs sets the arguments for running the server
+func (h *ServerHandler) SetRunArgs(fn func() []string) *ServerHandler {
+	h.Config.ArgumentsToRunServer = fn
+	return h
+}
+
+// SetDisableGlobalCleanup enables or disables global cleanup
+func (h *ServerHandler) SetDisableGlobalCleanup(disable bool) *ServerHandler {
+	h.Config.DisableGlobalCleanup = disable
+	return h
+}
+
+// RegisterRoutes appends fn to the internal route list.
+// Call before StartServer.
+func (h *ServerHandler) RegisterRoutes(fn func(*http.ServeMux)) *ServerHandler {
+	h.routes = append(h.routes, fn)
+	return h
 }
 
 func (h *ServerHandler) log(messages ...any) {
