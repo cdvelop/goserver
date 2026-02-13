@@ -34,14 +34,14 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	// Pre-fill exit channel so Start() doesn't block waiting
 	exitChan <- true
 
-	h := server.New().
-		SetAppRootDir(tmp).
-		SetSourceDir("src/app").
-		SetOutputDir("deploy").
-		SetPort("0"). // Use random port to avoid conflicts if it runs
-		SetExitChan(exitChan).
-		SetDisableGlobalCleanup(true).
-		SetLogger(logger)
+	h := server.New()
+	h.SetAppRootDir(tmp)
+	h.SetSourceDir("src/app")
+	h.SetOutputDir("deploy")
+	h.SetPort("0") // Use random port to avoid conflicts if it runs
+	h.SetExitChan(exitChan)
+	h.SetDisableGlobalCleanup(true)
+	h.SetLogger(logger)
 
 	// Ensure external file doesn't exist initially
 	target := filepath.Join(h.AppRootDir, h.MainInputFileRelativePath())

@@ -29,10 +29,10 @@ func TestServerHandler_Value(t *testing.T) {
 	exitChan := make(chan bool, 1)
 	exitChan <- true
 
-	h := server.New().
-		SetAppRootDir(tmpData).
-		SetSourceDir("src").
-		SetExitChan(exitChan)
+	h := server.New()
+	h.SetAppRootDir(tmpData)
+	h.SetSourceDir("src")
+	h.SetExitChan(exitChan)
 
 	// Case 1: Default (Internal + In-Memory)
 	if got := h.Value(); got != "Execution External:F" {
@@ -69,11 +69,11 @@ func TestServerHandler_Change(t *testing.T) {
 			exitChan <- true
 
 			db := &mockStore{data: make(map[string]string)}
-			h := server.New().
-				SetAppRootDir(tmpData).
-				SetSourceDir("src").
-				SetExitChan(exitChan).
-				SetStore(db)
+			h := server.New()
+			h.SetAppRootDir(tmpData)
+			h.SetSourceDir("src")
+			h.SetExitChan(exitChan)
+			h.SetStore(db)
 
 			h.Change(tt.input)
 
@@ -91,11 +91,11 @@ func TestSetExternalServerMode_SwitchesToExternal(t *testing.T) {
 	exitChan := make(chan bool, 1)
 	exitChan <- true
 
-	h := server.New().
-		SetAppRootDir(tmpData).
-		SetSourceDir("src").
-		SetOutputDir("bin").
-		SetExitChan(exitChan)
+	h := server.New()
+	h.SetAppRootDir(tmpData)
+	h.SetSourceDir("src")
+	h.SetOutputDir("bin")
+	h.SetExitChan(exitChan)
 
 	if isExternal(h.Value()) {
 		t.Fatal("expected initial executionInternal to be true (External:F)")
@@ -122,10 +122,10 @@ func TestSetExternalServerMode_PreventsSwitchingToInternal(t *testing.T) {
 	exitChan := make(chan bool, 1)
 	exitChan <- true
 
-	h := server.New().
-		SetAppRootDir(tmpData).
-		SetSourceDir("src").
-		SetExitChan(exitChan)
+	h := server.New()
+	h.SetAppRootDir(tmpData)
+	h.SetSourceDir("src")
+	h.SetExitChan(exitChan)
 
 	// 1. Switch to External
 	if err := h.SetExternalServerMode(true); err != nil {
@@ -152,10 +152,10 @@ func TestSetExternalServerMode_BlocksInternal_WhenModified(t *testing.T) {
 	exitChan := make(chan bool, 1)
 	exitChan <- true
 
-	h := server.New().
-		SetAppRootDir(tmpData).
-		SetSourceDir("src").
-		SetExitChan(exitChan)
+	h := server.New()
+	h.SetAppRootDir(tmpData)
+	h.SetSourceDir("src")
+	h.SetExitChan(exitChan)
 
 	if err := h.SetExternalServerMode(true); err != nil {
 		t.Logf("switch to external error: %v", err)
@@ -189,13 +189,13 @@ func TestGitIgnoreAdd_CalledOnExternalMode(t *testing.T) {
 		return nil
 	}
 
-	h := server.New().
-		SetAppRootDir(tmpData).
-		SetSourceDir("web").
-		SetOutputDir("web").
-		SetMainInputFile("server.go").
-		SetExitChan(exitChan).
-		SetGitIgnoreAdd(gitIgnoreAdd)
+	h := server.New()
+	h.SetAppRootDir(tmpData)
+	h.SetSourceDir("web")
+	h.SetOutputDir("web")
+	h.SetMainInputFile("server.go")
+	h.SetExitChan(exitChan)
+	h.SetGitIgnoreAdd(gitIgnoreAdd)
 
 	// Switch to external mode - this should trigger GitIgnoreAdd
 	err := h.SetExternalServerMode(true)
@@ -225,15 +225,15 @@ func TestModeSwitchWhileRunning_DoesNotHang(t *testing.T) {
 	}
 
 	db := &mockStore{data: make(map[string]string)}
-	h := server.New().
-		SetAppRootDir(tmpData).
-		SetSourceDir("src").
-		SetOutputDir("bin").
-		SetPort("18080"). // Use non-standard port to avoid conflicts
-		SetExitChan(exitChan).
-		SetDisableGlobalCleanup(true).
-		SetLogger(logger).
-		SetStore(db)
+	h := server.New()
+	h.SetAppRootDir(tmpData)
+	h.SetSourceDir("src")
+	h.SetOutputDir("bin")
+	h.SetPort("18080") // Use non-standard port to avoid conflicts
+	h.SetExitChan(exitChan)
+	h.SetDisableGlobalCleanup(true)
+	h.SetLogger(logger)
+	h.SetStore(db)
 
 	// Start the internal server in a goroutine (like app does)
 	var wg sync.WaitGroup
@@ -316,11 +316,11 @@ func TestStartServer_DetectsExistingServerFile(t *testing.T) {
 	exitChan := make(chan bool, 1)
 	exitChan <- true // Prevent blocking on StartServer
 
-	h := server.New().
-		SetAppRootDir(tmpData).
-		SetSourceDir("web").
-		SetMainInputFile("server.go").
-		SetExitChan(exitChan)
+	h := server.New()
+	h.SetAppRootDir(tmpData)
+	h.SetSourceDir("web")
+	h.SetMainInputFile("server.go")
+	h.SetExitChan(exitChan)
 
 	// Expectation: Initially Internal
 	if isExternal(h.Value()) {

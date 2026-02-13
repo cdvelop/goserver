@@ -31,14 +31,14 @@ func TestExternalStrategyLogsAreVisible(t *testing.T) {
 
 	// Create handler WITHOUT Logger in config (simulates app/section-build.go)
 	exitChan := make(chan bool)
-	h := server.New().
-		SetAppRootDir(tmpDir).
-		SetSourceDir(sourceDir).
-		SetOutputDir(outputDir).
-		SetMainInputFile("main.go").
-		SetPort("19090").
-		SetExitChan(exitChan).
-		SetDisableGlobalCleanup(true)
+	h := server.New()
+	h.SetAppRootDir(tmpDir)
+	h.SetSourceDir(sourceDir)
+	h.SetOutputDir(outputDir)
+	h.SetMainInputFile("main.go")
+	h.SetPort("19090")
+	h.SetExitChan(exitChan)
+	h.SetDisableGlobalCleanup(true)
 
 	// Create a server file with a syntax error to trigger a build failure
 	// We do this AFTER New() to ensure we start in Internal mode, so
@@ -134,14 +134,14 @@ func TestExternalStrategyRuntimeErrorLogsAreVisible(t *testing.T) {
 
 	// Create handler WITHOUT Logger in config (simulates app/section-build.go)
 	exitChan := make(chan bool)
-	h := server.New().
-		SetAppRootDir(tmpDir).
-		SetSourceDir(sourceDir).
-		SetOutputDir(outputDir).
-		SetMainInputFile("main.go").
-		SetPort("19091").
-		SetExitChan(exitChan).
-		SetDisableGlobalCleanup(true)
+	h := server.New()
+	h.SetAppRootDir(tmpDir)
+	h.SetSourceDir(sourceDir)
+	h.SetOutputDir(outputDir)
+	h.SetMainInputFile("main.go")
+	h.SetPort("19091")
+	h.SetExitChan(exitChan)
+	h.SetDisableGlobalCleanup(true)
 
 	// Create a server file that compiles but prints an error and exits
 	// We do this AFTER New() to ensure we start in Internal mode

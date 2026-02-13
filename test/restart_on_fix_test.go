@@ -69,14 +69,14 @@ func main() {
 		t.Fatalf("writing initial server file: %v", err)
 	}
 
-	handler := server.New().
-		SetAppRootDir(tmp).
-		SetSourceDir(filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator)))).
-		SetOutputDir(filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator)))).
-		SetPort(fmt.Sprintf("%d", port)).
-		SetExitChan(exitChan).
-		SetDisableGlobalCleanup(true).
-		SetLogger(logger)
+	handler := server.New()
+	handler.SetAppRootDir(tmp)
+	handler.SetSourceDir(filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))))
+	handler.SetOutputDir(filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))))
+	handler.SetPort(fmt.Sprintf("%d", port))
+	handler.SetExitChan(exitChan)
+	handler.SetDisableGlobalCleanup(true)
+	handler.SetLogger(logger)
 
 	if err := handler.SetExternalServerMode(true); err != nil {
 		t.Fatalf("failed to set external server mode: %v", err)

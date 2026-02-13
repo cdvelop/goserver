@@ -13,8 +13,12 @@ func (h *ServerHandler) Label() string {
 
 // Value implements HandlerEdit.Value
 func (h *ServerHandler) Value() string {
+	h.strategyMu.RLock()
+	isExternal := !h.executionInternal
+	h.strategyMu.RUnlock()
+
 	exec := "F"
-	if !h.executionInternal {
+	if isExternal {
 		exec = "T"
 	}
 	return "Execution External:" + exec

@@ -22,6 +22,8 @@ type serverInterface interface {
 	Value() string
 	Change(v string) error
 	RefreshUI()
+	MainInputFileRelativePath() string
+	RegisterRoutes(fn func(*http.ServeMux))
 }
 
 // Store defines the minimal interface for persistent storage
@@ -68,18 +70,18 @@ type ServerHandler struct {
 }
 
 type Config struct {
-	AppRootDir                  string                 // e.g., /home/user/project (application root directory)
-	SourceDir                   string                 // directory location of main.go e.g., src/cmd/appserver (relative to AppRootDir)
-	OutputDir                   string                 // compilation and execution directory e.g., deploy/appserver (relative to AppRootDir)
-	PublicDir                   string                 // default public dir for generated server (e.g., src/web/public)
-	MainInputFile               string                 // main input file name (default: "main.go", can be "server.go", etc.)
-	ArgumentsForCompilingServer func() []string        // e.g., []string{"-X 'main.version=v1.0.0'"}
-	ArgumentsToRunServer        func() []string        // e.g., []string{"dev"}
-	AppPort                     string                 // e.g., 6060
-	Https                       bool                   // true if HTTPS is enabled
-	DisableGlobalCleanup        bool                   // If true, disables global cleanup in gorun during restarts
-	Logger                      func(message ...any)   // Logger function
-	ExitChan                    chan bool              // Global channel to signal shutdown
+	AppRootDir                  string               // e.g., /home/user/project (application root directory)
+	SourceDir                   string               // directory location of main.go e.g., src/cmd/appserver (relative to AppRootDir)
+	OutputDir                   string               // compilation and execution directory e.g., deploy/appserver (relative to AppRootDir)
+	PublicDir                   string               // default public dir for generated server (e.g., src/web/public)
+	MainInputFile               string               // main input file name (default: "main.go", can be "server.go", etc.)
+	ArgumentsForCompilingServer func() []string      // e.g., []string{"-X 'main.version=v1.0.0'"}
+	ArgumentsToRunServer        func() []string      // e.g., []string{"dev"}
+	AppPort                     string               // e.g., 6060
+	Https                       bool                 // true if HTTPS is enabled
+	DisableGlobalCleanup        bool                 // If true, disables global cleanup in gorun during restarts
+	Logger                      func(message ...any) // Logger function
+	ExitChan                    chan bool            // Global channel to signal shutdown
 	OpenBrowser                 func(port string, https bool)
 	Store                       Store                    // Persistent storage for modes
 	UI                          UI                       // UI for refresh notifications
@@ -122,21 +124,18 @@ func New() *ServerHandler {
 }
 
 // SetAppRootDir sets the application root directory
-func (h *ServerHandler) SetAppRootDir(dir string) *ServerHandler {
+func (h *ServerHandler) SetAppRootDir(dir string) {
 	h.Config.AppRootDir = dir
-	return h
 }
 
 // SetSourceDir sets the source directory relative to AppRootDir
-func (h *ServerHandler) SetSourceDir(dir string) *ServerHandler {
+func (h *ServerHandler) SetSourceDir(dir string) {
 	h.Config.SourceDir = dir
-	return h
 }
 
 // SetOutputDir sets the output directory relative to AppRootDir
-func (h *ServerHandler) SetOutputDir(dir string) *ServerHandler {
+func (h *ServerHandler) SetOutputDir(dir string) {
 	h.Config.OutputDir = dir
-	return h
 }
 
 // SetPublicDir sets the public directory
@@ -146,16 +145,14 @@ func (h *ServerHandler) SetPublicDir(dir string) *ServerHandler {
 }
 
 // SetMainInputFile sets the main input file name
-func (h *ServerHandler) SetMainInputFile(name string) *ServerHandler {
+func (h *ServerHandler) SetMainInputFile(name string) {
 	h.Config.MainInputFile = name
 	h.mainFileExternalServer = name
-	return h
 }
 
 // SetPort sets the server port
-func (h *ServerHandler) SetPort(port string) *ServerHandler {
+func (h *ServerHandler) SetPort(port string) {
 	h.Config.AppPort = port
-	return h
 }
 
 // SetHTTPS enables or disables HTTPS
@@ -214,28 +211,24 @@ func (h *ServerHandler) SetGitIgnoreAdd(fn func(string) error) *ServerHandler {
 }
 
 // SetCompileArgs sets the arguments for compiling the server
-func (h *ServerHandler) SetCompileArgs(fn func() []string) *ServerHandler {
+func (h *ServerHandler) SetCompileArgs(fn func() []string) {
 	h.Config.ArgumentsForCompilingServer = fn
-	return h
 }
 
 // SetRunArgs sets the arguments for running the server
-func (h *ServerHandler) SetRunArgs(fn func() []string) *ServerHandler {
+func (h *ServerHandler) SetRunArgs(fn func() []string) {
 	h.Config.ArgumentsToRunServer = fn
-	return h
 }
 
 // SetDisableGlobalCleanup enables or disables global cleanup
-func (h *ServerHandler) SetDisableGlobalCleanup(disable bool) *ServerHandler {
+func (h *ServerHandler) SetDisableGlobalCleanup(disable bool) {
 	h.Config.DisableGlobalCleanup = disable
-	return h
 }
 
 // RegisterRoutes appends fn to the internal route list.
 // Call before StartServer.
-func (h *ServerHandler) RegisterRoutes(fn func(*http.ServeMux)) *ServerHandler {
+func (h *ServerHandler) RegisterRoutes(fn func(*http.ServeMux)) {
 	h.routes = append(h.routes, fn)
-	return h
 }
 
 func (h *ServerHandler) log(messages ...any) {
