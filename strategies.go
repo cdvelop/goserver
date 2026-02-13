@@ -144,7 +144,11 @@ func (s *internalStrategy) Stop() error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	timeout := 1 * time.Second
+	if TestMode {
+		timeout = 100 * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	err := s.server.Shutdown(ctx)
@@ -181,14 +185,18 @@ func (s *internalStrategy) Restart() error {
 
 func waitForPortFree(port string) {
 	addr := ":" + port
-	deadline := time.Now().Add(2 * time.Second)
+	limit := 1 * time.Second
+	if TestMode {
+		limit = 100 * time.Millisecond
+	}
+	deadline := time.Now().Add(limit)
 	for time.Now().Before(deadline) {
 		ln, err := net.Listen("tcp", addr)
 		if err == nil {
 			ln.Close()
 			return
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -205,8 +213,12 @@ func WaitForPortListening(port string, timeout time.Duration, https bool) bool {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+	timeoutCtx := 500 * time.Millisecond
+	if TestMode {
+		timeoutCtx = 50 * time.Millisecond
+	}
 	client := &http.Client{
-		Timeout:   500 * time.Millisecond,
+		Timeout:   timeoutCtx,
 		Transport: tr,
 	}
 
@@ -217,7 +229,7 @@ func WaitForPortListening(port string, timeout time.Duration, https bool) bool {
 			resp.Body.Close()
 			return true
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	return false
 }

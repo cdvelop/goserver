@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/tinywasm/server"
 )
@@ -17,7 +16,7 @@ func newTestHandler(t *testing.T, sourceDir, outputDir, appRootDir string) *serv
 		SourceDir:  sourceDir,
 		OutputDir:  outputDir,
 		AppPort:    "9090",
-		ExitChan:   make(chan bool, 1),
+		ExitChan:   make(chan bool, 10),
 	}
 	h := server.New(cfg)
 	h.SetLog(t.Log)
@@ -40,8 +39,9 @@ func TestGenerateCreatesFile(t *testing.T) {
 		t.Fatalf("expected no existing file at %s", target)
 	}
 
-	// Signal exit immediately so CreateTemplateServer doesn't block on Start
-	h.ExitChan <- true
+	// Signal exit immediately so CreateTemplateServer doesn't block on Start.
+	// We close the channel so all workers (strategy, gorun) receive the signal.
+	close(h.ExitChan)
 
 	// Use CreateTemplateServer instead of internal generateServerFromEmbeddedMarkdown
 	// It will stop internal, generate, compile, and run. We expect it to generate.
@@ -108,14 +108,7 @@ func TestGenerateDoesNotOverwrite(t *testing.T) {
 	}
 
 	// Signal exit immediately
-	h.ExitChan <- true
-	go func() {
-		// Drain exit chan to ensure it can receive subsequent signals if needed?
-		// Actually CreateTemplateServer might need time to stop internal server.
-		// Stop() waits for 5 seconds.
-		time.Sleep(100 * time.Millisecond)
-		h.ExitChan <- true
-	}()
+	close(h.ExitChan)
 
 	if err := h.CreateTemplateServer(); err != nil {
 		t.Logf("CreateTemplateServer returned error: %v", err)

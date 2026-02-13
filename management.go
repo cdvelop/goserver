@@ -49,3 +49,16 @@ func (h *ServerHandler) StopServer() error {
 func (h *ServerHandler) RestartServer() error {
 	return h.strategy.Restart()
 }
+
+// Restart restarts the server.
+// It delegates to the current strategy's Restart method.
+func (h *ServerHandler) Restart() error {
+	h.strategyMu.RLock()
+	defer h.strategyMu.RUnlock()
+
+	if h.strategy != nil {
+		h.log("Restarting server strategy:", h.strategy.Name())
+		return h.strategy.Restart()
+	}
+	return nil
+}

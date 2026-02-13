@@ -7,9 +7,9 @@ import "errors"
 // This implements the transition from "Internal" to "External" mode.
 func (h *ServerHandler) CreateTemplateServer() error {
 	h.strategyMu.Lock()
-	defer h.strategyMu.Unlock()
 
 	if !h.executionInternal {
+		h.strategyMu.Unlock()
 		h.log("Server is already in external mode.")
 		return nil
 	}
@@ -31,10 +31,14 @@ func (h *ServerHandler) CreateTemplateServer() error {
 	h.executionInternal = false
 	h.strategy = newExternalStrategy(h)
 
+	// Capture strategy to call Start on it without needing the lock
+	s := h.strategy
+	h.strategyMu.Unlock()
+
 	h.log("Starting External Server...")
 	// Start the new external server (compiles and runs)
 	// We pass nil for wg because this is a runtime transition, not application startup
-	if err := h.strategy.Start(nil); err != nil {
+	if err := s.Start(nil); err != nil {
 		// If start fails, should we try to revert?
 		// For now, return the error.
 		return errors.Join(errors.New("failed to start external server"), err)

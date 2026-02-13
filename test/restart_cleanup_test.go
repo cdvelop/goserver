@@ -145,7 +145,9 @@ func main() {
 	client := &http.Client{Timeout: 2 * time.Second}
 	url := "http://127.0.0.1:" + fmt.Sprintf("%d", port) + "/h"
 
-	time.Sleep(2 * time.Second) // Give server time to start
+	if !server.WaitForPortListening(fmt.Sprintf("%d", port), 5*time.Second, false) {
+		t.Fatalf("Initial server not responding")
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		t.Fatalf("Initial server not responding: %v", err)
@@ -238,7 +240,9 @@ func main() {
 	}
 
 	// Test 4: Verify new version is running
-	time.Sleep(2 * time.Second) // Give server time to start
+	if !server.WaitForPortListening(fmt.Sprintf("%d", port), 5*time.Second, false) {
+		t.Fatalf("Restarted server not responding")
+	}
 	resp2, err := client.Get(url)
 	if err != nil {
 		t.Fatalf("Restarted server not responding: %v", err)
@@ -255,5 +259,4 @@ func main() {
 
 	// Cleanup
 	h.StopServer()
-	time.Sleep(1 * time.Second)
 }

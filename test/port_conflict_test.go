@@ -107,7 +107,9 @@ func main() {
 	} // Ensure it uses gorun
 	go h.StartServer(nil)
 
-	time.Sleep(1 * time.Second)
+	if !server.WaitForPortListening(portStr, 5*time.Second, false) {
+		t.Fatalf("Initial server not responding")
+	}
 
 	// Test 2: Try to start a second server on the same port (this should cause conflict)
 	// Create second handler with same port
@@ -158,26 +160,19 @@ func main() {
 	go h.StartServer(nil)
 
 	// Verify the server is actually running
-	// Verify the server is actually running
-	time.Sleep(1 * time.Second)
 	client := &http.Client{Timeout: 2 * time.Second}
 	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
-
-	// Retry loop for robustness
-	deadline := time.Now().Add(5 * time.Second)
-	success := false
-	for time.Now().Before(deadline) {
-		if resp, httpErr := client.Get(url); httpErr == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 200 {
-				success = true
-				break
-			}
-		}
-		time.Sleep(500 * time.Millisecond)
+	if !server.WaitForPortListening(portStr, 5*time.Second, false) {
+		t.Fatalf("❌ Restarted server failed to respond on %s", url)
 	}
-	if !success {
-		t.Errorf("❌ Restarted server failed to respond on %s", url)
+
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("Restarted server not responding: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("Restarted server returned status %d", resp.StatusCode)
 	}
 
 	// Cleanup
