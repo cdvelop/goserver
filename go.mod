@@ -3,7 +3,7 @@ module github.com/tinywasm/server
 go 1.25.2
 
 require (
-	github.com/tinywasm/devflow v0.2.8
+	github.com/tinywasm/devflow v0.2.9
 	github.com/tinywasm/fmt v0.18.4
 	github.com/tinywasm/gobuild v0.0.24
 	github.com/tinywasm/gorun v0.0.19
