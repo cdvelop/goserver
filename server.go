@@ -20,7 +20,7 @@ type serverInterface interface {
 	Name() string
 	Label() string
 	Value() string
-	Change(v string) error
+	Change(v string)
 	RefreshUI()
 	MainInputFileRelativePath() string
 	RegisterRoutes(fn func(*http.ServeMux))
