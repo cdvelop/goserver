@@ -3,7 +3,7 @@ module github.com/tinywasm/server
 go 1.25.2
 
 require (
-	github.com/tinywasm/devflow v0.2.9
+	github.com/tinywasm/devflow v0.2.14
 	github.com/tinywasm/fmt v0.18.4
 	github.com/tinywasm/gobuild v0.0.24
 	github.com/tinywasm/gorun v0.0.19
@@ -16,5 +16,6 @@ require (
 	github.com/tinywasm/context v0.0.11 // indirect
 	github.com/tinywasm/wizard v0.0.22 // indirect
 	github.com/zalando/go-keyring v0.2.6 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
 )
