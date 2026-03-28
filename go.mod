@@ -6,7 +6,7 @@ require (
 	github.com/tinywasm/devflow v0.4.14
 	github.com/tinywasm/fmt v0.20.0
 	github.com/tinywasm/gobuild v0.0.24
-	github.com/tinywasm/gorun v0.0.22
+	github.com/tinywasm/gorun v0.0.23
 )
 
 require (
