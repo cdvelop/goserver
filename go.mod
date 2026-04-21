@@ -4,7 +4,7 @@ go 1.25.2
 
 require (
 	github.com/tinywasm/devflow v0.4.15
-	github.com/tinywasm/fmt v0.23.4
+	github.com/tinywasm/fmt v0.23.5
 	github.com/tinywasm/gobuild v0.0.25
 	github.com/tinywasm/gorun v0.0.23
 )
