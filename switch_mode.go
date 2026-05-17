@@ -36,6 +36,15 @@ func (h *ServerHandler) CreateTemplateServer() error {
 	h.strategyMu.Unlock()
 
 	h.log("Starting External Server...")
+
+	// Gate the external strategy on the same hook that StartServer uses.
+	// CreateTemplateServer is an external-mode transition entrypoint; the hook
+	// must fire here too, by the same idempotency contract documented in
+	// SetBeforeExternalServerStart.
+	if err := h.BeforeExternalServerStart(); err != nil {
+		return errors.Join(errors.New("BeforeExternalServerStart failed"), err)
+	}
+
 	// Start the new external server (compiles and runs)
 	// We pass nil for wg because this is a runtime transition, not application startup
 	if err := s.Start(nil); err != nil {

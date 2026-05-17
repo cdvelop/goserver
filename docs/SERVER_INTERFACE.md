@@ -104,10 +104,10 @@ Methods specific to the external execution strategy:
 
 ### BeforeExternalServerStart Hook
 
-The hook registered via `SetBeforeExternalServerStart` is invoked synchronously BEFORE `strategy.Start` in every external-mode `StartServer` call.
+The hook registered via `SetBeforeExternalServerStart` is invoked synchronously before any transition into external mode, including both `StartServer` (when an external server file is detected) and `CreateTemplateServer` (when the template generator runs).
 
 - **Errors:** Returning a non-nil error aborts the transition; `strategy.Start` is not invoked and the error is logged.
-- **Idempotency:** The hook fires on every external-mode `StartServer`, not just on transitions.
+- **Idempotency:** The hook fires on every external-mode `StartServer` call, not only on the internal→external transition. Implementations must be safe to invoke N times.
 - **Restarts:** `RestartServer` does NOT invoke this hook.
 
 ---
