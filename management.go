@@ -25,7 +25,15 @@ func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
 	strategy := h.strategy
 	h.strategyMu.Unlock()
 
-	h.OnExternalModeExecution(!isInternal)
+	if !isInternal {
+		if err := h.BeforeExternalServerStart(); err != nil {
+			h.log("BeforeExternalServerStart failed, aborting transition:", err)
+			if wg != nil {
+				wg.Done()
+			}
+			return
+		}
+	}
 
 	if err := strategy.Start(wg); err != nil {
 		h.log("StartServer error:", err)

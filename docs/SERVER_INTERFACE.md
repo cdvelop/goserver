@@ -97,10 +97,18 @@ Methods specific to the external execution strategy:
 
 | Method | Purpose |
 |---|---|
-| `SetOnExternalModeExecution(fn func(bool))` | Callback for mode transitions |
+| `SetBeforeExternalServerStart(fn func() error)` | Hook invoked before external process start. Errors abort startup. |
 | `SetExternalServerMode(external bool) error` | Explicitly switch strategy |
 | `CreateTemplateServer() error` | Generate and run external server files |
 | `MainInputFileRelativePath() string` | Resolution helper |
+
+### BeforeExternalServerStart Hook
+
+The hook registered via `SetBeforeExternalServerStart` is invoked synchronously BEFORE `strategy.Start` in every external-mode `StartServer` call.
+
+- **Errors:** Returning a non-nil error aborts the transition; `strategy.Start` is not invoked and the error is logged.
+- **Idempotency:** The hook fires on every external-mode `StartServer`, not just on transitions.
+- **Restarts:** `RestartServer` does NOT invoke this hook.
 
 ---
 
