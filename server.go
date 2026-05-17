@@ -85,7 +85,7 @@ type Config struct {
 	OpenBrowser                 func(port string, https bool)
 	Store                       Store                    // Persistent storage for modes
 	UI                          UI                       // UI for refresh notifications
-	OnExternalModeExecution     func(isExternal bool)    // Called before StartServer to notify mode change
+	BeforeExternalServerStart   func() error             // Called synchronously before external strategy starts
 	GitIgnoreAdd                func(entry string) error // Callback to add entries to .gitignore
 }
 
@@ -102,7 +102,7 @@ func New() *ServerHandler {
 		ExitChan:                    make(chan bool),
 		ArgumentsForCompilingServer: func() []string { return nil },
 		ArgumentsToRunServer:        func() []string { return nil },
-		OnExternalModeExecution:     func(bool) {},
+		BeforeExternalServerStart:   func() error { return nil },
 		GitIgnoreAdd:                func(string) error { return nil },
 	}
 
@@ -198,9 +198,18 @@ func (h *ServerHandler) SetUI(ui UI) *ServerHandler {
 	return h
 }
 
-// SetOnExternalModeExecution sets the callback for external mode execution
-func (h *ServerHandler) SetOnExternalModeExecution(fn func(bool)) *ServerHandler {
-	h.Config.OnExternalModeExecution = fn
+// SetBeforeExternalServerStart registers a function invoked synchronously
+// BEFORE strategy.Start in every external-mode StartServer call. Returning
+// a non-nil error aborts the transition: strategy.Start is NOT invoked and
+// the error is logged.
+//
+// Idempotency: the hook fires on every external-mode StartServer, not only
+// on the internal→external transition (external mode is sticky, persisted
+// via the Store). Implementations must be safe to invoke N times.
+//
+// RestartServer does NOT invoke this hook.
+func (h *ServerHandler) SetBeforeExternalServerStart(fn func() error) *ServerHandler {
+	h.Config.BeforeExternalServerStart = fn
 	return h
 }
 
