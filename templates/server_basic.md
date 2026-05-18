@@ -50,7 +50,10 @@ func main() {
 		port = "{{.AppPort}}"
 	}
 
-	publicDir := "{{.PublicDir}}"
+	publicDir := lookupArg("server_public_dir")
+	if publicDir == "" {
+		publicDir = "{{.PublicDir}}"
+	}
 
 	log.Printf("Serving static files from: %s on port %s", publicDir, port)
 
