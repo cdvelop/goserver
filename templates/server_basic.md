@@ -34,6 +34,7 @@ func main() {
 	// Define flags
 	publicDir := flag.String("public-dir", "", "Directory containing static files")
 	port := flag.String("port", "", "Port to listen on")
+	flag.Bool("dev", false, "Run in development mode")
 	flag.Parse()
 
 	// Priority: flag > env var > default
