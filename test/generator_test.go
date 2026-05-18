@@ -64,28 +64,24 @@ func TestGenerateCreatesFile(t *testing.T) {
 	if !strings.Contains(content, "9090") {
 		t.Errorf("generated file missing substituted AppPort (9090)")
 	}
-	// Verify it uses flag package
-	if !strings.Contains(content, `flag.String`) {
-		t.Errorf("generated file missing flag.String usage")
+	// Verify manual arg parsing (no flag package)
+	if !strings.Contains(content, `lookupArg`) {
+		t.Errorf("generated file missing lookupArg function")
 	}
-	// Verify it has the new flag-based configuration
-	if !strings.Contains(content, `publicDir := flag.String("public-dir"`) {
-		t.Errorf("generated file missing public-dir flag")
+	if strings.Contains(content, `flag.Parse`) {
+		t.Errorf("generated file must not use flag.Parse")
 	}
-	if !strings.Contains(content, `port := flag.String("port"`) {
-		t.Errorf("generated file missing port flag")
-	}
-	// Verify it uses filepath.Abs for path resolution
-	if !strings.Contains(content, `filepath.Abs`) {
-		t.Errorf("generated file missing filepath.Abs call")
+	// Verify it reads server_port arg
+	if !strings.Contains(content, `lookupArg("server_port")`) {
+		t.Errorf("generated file missing lookupArg(\"server_port\")")
 	}
 	// Verify noCache middleware exists
 	if !strings.Contains(content, `noCache`) {
 		t.Errorf("generated file missing noCache middleware")
 	}
 	// Verify default public dir
-	if !strings.Contains(content, `*publicDir = "web/public"`) {
-		t.Errorf("generated file missing substituted PublicDir (web/public)")
+	if !strings.Contains(content, `web/public`) {
+		t.Errorf("generated file missing default public dir (web/public)")
 	}
 }
 

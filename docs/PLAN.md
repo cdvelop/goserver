@@ -1,67 +1,76 @@
-# PLAN: Fix `-dev` Flag Missing in Default Server Template
+# PLAN: Simplify Default Server Template — Manual Arg Parsing
 
-## Bug Report
+## Problem
 
-When `tinywasm/app` runs in `DevMode`, it passes `-dev` as a runtime argument to the compiled external server binary (`app/section-build.go:122`). However, the default server template (`templates/server_basic.md`) does not define this flag, causing the server to exit with:
+The default server template uses Go's `flag` package. `flag.Parse()` calls `os.Exit(2)` on
+any unknown flag. Every new flag that `app` or `client` passes to the server binary breaks
+existing generated servers.
 
-```
-flag provided but not defined: -dev
-exit status 2
-```
-
-Any project using the auto-generated `web/server.go` (e.g. `goflare-demo`) is broken in dev mode.
+Past breakages:
+- `-dev` added in `app/section-build.go` → server crashed
+- `-wasmsize_mode` added in `client/javascripts.go` → server crashed
 
 ## Root Cause
 
-**Two-library contract mismatch:**
+`flag` package is the wrong tool here. The server only needs **one** value from its caller:
+the port. Everything else is irrelevant to a static-file server.
 
-| Side | Location | What it does |
-|------|----------|--------------|
-| Caller (`app`) | `app/section-build.go:121-123` | Appends `-dev` to `SetRunArgs` when `h.DevMode == true` |
-| Callee (`server`) | `templates/server_basic.md` | Generated template never defines `-dev` flag |
+## Solution — Manual `os.Args` scan, no `flag` package
 
-The `app` package assumes any external server it manages will accept `-dev`. The template (which is the **only** auto-generated server) does not fulfil that assumption.
-
-## Fix
-
-### Stage 1 — Update template (`server/templates/server_basic.md`)
-
-Add `flag.Bool("dev", false, "Run in development mode")` to the flag definitions in `main()`.
-
-The flag value can be used by the server to:
-- Disable HTTP response caching (already done unconditionally — can be made conditional)
-- Log verbosely in dev mode (optional)
-
-Minimal fix (just accept the flag without behavior change):
+Replace `flag` with a small helper that scans `os.Args` for a specific key and returns the
+value. Unknown args are silently ignored.
 
 ```go
-// existing flags
-publicDir := flag.String("public-dir", "", "Directory containing static files")
-port      := flag.String("port", "", "Port to listen on")
-dev       := flag.Bool("dev", false, "Run in development mode")  // ADD THIS
-flag.Parse()
-_ = dev  // consumed by orchestrator — accepted but not required for basic server
+// lookupArg returns the value for -key=value or -key value in os.Args.
+// Returns "" if not found.
+func lookupArg(key string) string {
+    prefix := "-" + key + "="
+    for i, arg := range os.Args[1:] {
+        if strings.HasPrefix(arg, prefix) {
+            return strings.TrimPrefix(arg, prefix)
+        }
+        if arg == "-"+key && i+1 < len(os.Args[1:]) {
+            return os.Args[i+2]
+        }
+    }
+    return ""
+}
 ```
 
-### Stage 2 — Update existing generated files
+### New template logic (simplified)
 
-Projects that already have a generated `web/server.go` (like `goflare-demo`) will **not** be regenerated automatically (generator skips existing files, see `generator.go:66`). Those files must be manually patched or users must delete and regenerate.
+```go
+func main() {
+    port := lookupArg("server_port")
+    if port == "" {
+        port = "6060"
+    }
+    // serve web/public on port
+}
+```
 
-Document this in a migration note or add a version-check mechanism in the generator.
+**No `flag` import. No `-public-dir`. No `-dev`. No `-wasmsize_mode`. No breakage.**
 
-### Stage 3 — Add test coverage
-
-Add a test in `server/test/` that:
-1. Uses the template content (via `CreateTemplateServer`)
-2. Compiles and runs it with `-dev` flag
-3. Verifies no `flag provided but not defined` error
+`public-dir` is removed as a flag — the server always serves from `web/public` relative to
+its working directory (already set by `gorun` via `WorkingDir`). That is sufficient for the
+default case; users who need a custom dir can modify their own `server.go`.
 
 ## Files to Change
 
-- `server/templates/server_basic.md` — add `-dev` flag definition
-- `goflare-demo/web/server.go` — patch existing generated copy (one-time)
+| File | Change |
+|------|--------|
+| `server/templates/server_basic.md` | Replace `flag` block with `lookupArg`, only read `-server_port` |
+| `goflare-demo/web/server.go` | Same patch (existing generated copy) |
 
-## Affected Libraries
+## What Does NOT Change
 
-- `github.com/tinywasm/server` — owns the template (fix here)
-- `github.com/tinywasm/app` — passes the flag (see companion PLAN in `app/docs/PLAN.md`)
+- `gorun` — no changes needed, already passes `RunArguments`
+- `app/section-build.go` — see companion `app/docs/PLAN.md`
+- `client/javascripts.go` — `-wasmsize_mode` can still be passed; server ignores it
+
+## Stage Checklist
+
+- [ ] Update `server/templates/server_basic.md`
+- [ ] Update `goflare-demo/web/server.go`
+- [ ] Run `gotest` in `tinywasm/server`
+- [ ] Publish with `gopush`
