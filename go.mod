@@ -14,9 +14,8 @@ require (
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/tinywasm/context v0.0.18 // indirect
-	github.com/tinywasm/dom v0.7.1 // indirect
 	github.com/tinywasm/fetch v0.1.23 // indirect
-	github.com/tinywasm/form v0.2.1 // indirect
+	github.com/tinywasm/form v0.2.7 // indirect
 	github.com/tinywasm/json v0.5.2 // indirect
 	github.com/tinywasm/mcp v0.1.9 // indirect
 	github.com/tinywasm/time v0.5.0 // indirect
