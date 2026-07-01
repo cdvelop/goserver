@@ -16,8 +16,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/tinywasm/context v0.0.18 h1:uKeiAFo6L/PikGSbUu+xcyELGoa4kXomDNwJOlhxrUE=
 github.com/tinywasm/context v0.0.18/go.mod h1:3AHZHMiiVZljEGNuYMaLM2OXdZ3bXjoMCmqx3sEGXsA=
-github.com/tinywasm/devflow v0.4.33 h1:PZh57d+0hHZ4WNgyELkp5yALP1F9Jr37AknDqMohzW0=
-github.com/tinywasm/devflow v0.4.33/go.mod h1:NFhm+uns4ovKY+QWbEkHn080T/sih80BprCUh6WN4Pk=
+github.com/tinywasm/devflow v0.4.34 h1:XxVoEm9/LRp8/VM1iibdV7o1WKyD8OBG5KhwCw51iJA=
+github.com/tinywasm/devflow v0.4.34/go.mod h1:oCD8G1iMA301/cBvbYYCKzuvkdZOQ7E0xCHbXi1wrf0=
 github.com/tinywasm/fetch v0.1.24 h1:UynB2NPPgYrwcRx6ZujkRUTlfUUkNs60J0O63/1FmAs=
 github.com/tinywasm/fetch v0.1.24/go.mod h1:Hx9bkdjC5fcf++EWjHKUzEn2OZpUbfoXNQV8tbdC5SI=
 github.com/tinywasm/fmt v0.24.5 h1:0DYv9h8cW+8FyVNvwAt1Q6DIdEH648VAV4a9UbyGxUI=
