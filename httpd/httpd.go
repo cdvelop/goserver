@@ -35,7 +35,15 @@ type Server struct {
 	router *httpRouter
 }
 
+func applyDefaults(c Config) Config {
+	if c.Port == "" {
+		c.Port = DefaultPort
+	}
+	return c
+}
+
 func New(c Config) *Server {
+	c = applyDefaults(c)
 	mux := http.NewServeMux()
 	r := NewRouter(mux).(*httpRouter)
 
@@ -60,10 +68,6 @@ func (s *Server) Mount(m ...router.APIModule) *Server {
 }
 
 func (s *Server) ListenAndServe() error {
-	if s.config.Port == "" {
-		s.config.Port = DefaultPort
-	}
-
 	if s.config.Health {
 		s.mux.HandleFunc(HealthPath, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
