@@ -1,2 +1,5 @@
 src/
 .env
+*.log
+*.out
+*coverage.html

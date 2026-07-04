@@ -7,7 +7,7 @@ require (
 	github.com/tinywasm/fmt v0.24.6
 	github.com/tinywasm/gobuild v0.0.26
 	github.com/tinywasm/gorun v0.0.24
-	github.com/tinywasm/router v0.1.0
+	github.com/tinywasm/router v0.1.1
 )
 
 require (

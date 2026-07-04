@@ -132,7 +132,7 @@ func (s *httpStreamer) Flush() {
 type httpRouter struct {
 	mux         *http.ServeMux
 	middlewares []router.Middleware
-	routes      []router.RouteInfo
+	routes      []*httpRoute
 }
 
 type httpRoute struct {
@@ -157,13 +157,14 @@ func (r *httpRouter) Use(m ...router.Middleware) {
 
 func (r *httpRouter) Handle(method, path string, h router.HandlerFunc) router.Route {
 	wrapped := h
-	// Apply middlewares in reverse order
-	for i := len(r.middlewares) - 1; i >= 0; i-- {
+	// Apply middlewares in order: mw[0] wraps innermost, mw[len-1] wraps outermost
+	// This way, mw[len-1] (last added) executes first
+	for i := 0; i < len(r.middlewares); i++ {
 		wrapped = r.middlewares[i](wrapped)
 	}
 
 	route := &httpRoute{info: router.RouteInfo{Method: method, Path: path}}
-	r.routes = append(r.routes, route.info)
+	r.routes = append(r.routes, route)
 
 	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
 		if method != "" && req.Method != method {
@@ -202,13 +203,13 @@ func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
 			h(&httpStreamer{httpContext: s})
 		}
 	}
-	// Apply middlewares
-	for i := len(r.middlewares) - 1; i >= 0; i-- {
+	// Apply middlewares in order: last added executes first
+	for i := 0; i < len(r.middlewares); i++ {
 		wrapped = r.middlewares[i](wrapped)
 	}
 
 	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}}
-	r.routes = append(r.routes, route.info)
+	r.routes = append(r.routes, route)
 
 	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
 		ctx := &httpContext{w: w, r: req}
@@ -222,7 +223,7 @@ func (r *httpRouter) Socket(path string, h router.SocketFunc) router.Route {
 	// For now, we provide a stub or use a basic hijacking if available.
 	// The tinywasm/router contract doesn't specify the upgrade mechanism.
 	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}}
-	r.routes = append(r.routes, route.info)
+	r.routes = append(r.routes, route)
 
 	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "WebSocket not implemented in native adapter", http.StatusNotImplemented)
@@ -231,5 +232,9 @@ func (r *httpRouter) Socket(path string, h router.SocketFunc) router.Route {
 }
 
 func (r *httpRouter) Routes() []router.RouteInfo {
-	return r.routes
+	result := make([]router.RouteInfo, len(r.routes))
+	for i, route := range r.routes {
+		result[i] = route.info
+	}
+	return result
 }
