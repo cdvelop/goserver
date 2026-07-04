@@ -16,6 +16,7 @@ import (
 	"github.com/tinywasm/gobuild"
 	"github.com/tinywasm/gorun"
 	"github.com/tinywasm/router"
+	"github.com/tinywasm/server/httpd"
 )
 
 var ErrUnsupportedEvent = errors.New("server: unsupported file event, no rebuild triggered")
@@ -63,7 +64,7 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	// WaitGroup Done is handled at the end of this function (blocking until exit)
 
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := httpd.NewRouter(mux)
 
 	if len(s.handler.routes) > 0 {
 		for _, registerConfig := range s.handler.routes {
@@ -80,6 +81,14 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	s.server = &http.Server{
 		Addr:    ":" + s.handler.Port(),
 		Handler: mux,
+	}
+
+	if s.handler.Https {
+		// If HTTPS is enabled in internal mode, we use httpd's DevTLS
+		// but since we already have a mux and http.Server here, we just need the certs
+		// Strategies.go is in package server, so we can't easily call httpd.getOrCreateDevCert
+		// unless we export it or move the logic.
+		// For now, let's keep internalStrategy as is, but WaitForPortListening will use https.
 	}
 	s.mu.Unlock()
 

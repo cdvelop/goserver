@@ -1,4 +1,4 @@
-package server
+package httpd
 
 import (
 	"bytes"
@@ -182,7 +182,7 @@ func TestHTTPContextMethods(t *testing.T) {
 
 func TestHTTPRouterRegistration(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux)
 
 	// Test Get returns Route
 	route := r.Get("/api/get", func(ctx router.Context) {})
@@ -229,7 +229,7 @@ func TestHTTPRouterRegistration(t *testing.T) {
 
 func TestHTTPRouterRoutes(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux)
 
 	// Register routes with metadata
 	r.Get("/users1", func(ctx router.Context) {}).Requires("users", "read")
@@ -271,7 +271,7 @@ func TestHTTPRouterRoutes(t *testing.T) {
 
 func TestHTTPRouterStreamAndSocket(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux)
 
 	// Test Stream returns Route
 	route := r.Stream("/stream", func(s router.Streamer) {})
@@ -294,7 +294,7 @@ func TestHTTPRouterStreamAndSocket(t *testing.T) {
 
 func TestHTTPRouterHandling(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux)
 
 	// Register a handler that writes to context
 	handlerCalled := false
@@ -322,7 +322,7 @@ func TestHTTPRouterHandling(t *testing.T) {
 
 func TestHTTPRouterMiddleware(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux)
 
 	callOrder := []string{}
 
@@ -366,7 +366,7 @@ func TestHTTPRouterMiddleware(t *testing.T) {
 
 func TestHTTPRouterMethodRestriction(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux)
 
 	handlerCalled := false
 	r.Post("/test_method", func(ctx router.Context) {
@@ -404,7 +404,7 @@ func TestHTTPStreamer(t *testing.T) {
 
 func TestHTTPRouterStreamExecution(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux)
 
 	streamCalled := false
 	r.Stream("/stream_test", func(s router.Streamer) {
@@ -430,7 +430,7 @@ func TestHTTPRouterStreamExecution(t *testing.T) {
 
 func TestHTTPSocketHandler(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux)
 
 	r.Socket("/ws", func(s router.Socket) {
 		// Socket handler body
@@ -448,7 +448,10 @@ func TestHTTPSocketHandler(t *testing.T) {
 
 func TestHTTPRouterComplexScenario(t *testing.T) {
 	mux := http.NewServeMux()
-	r := newHTTPRouter(mux)
+	r := NewRouter(mux).(*httpRouter)
+
+	// Set an empty authorizer to avoid 500 when RBAC is triggered
+	r.setAuthorizer(nil, func(u, r, a string) bool { return true })
 
 	// Build a realistic API
 	r.Get("/api/users", func(ctx router.Context) {
