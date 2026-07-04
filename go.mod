@@ -5,8 +5,8 @@ go 1.25.2
 require (
 	github.com/tinywasm/devflow v0.4.35
 	github.com/tinywasm/fmt v0.24.6
-	github.com/tinywasm/gobuild v0.0.25
-	github.com/tinywasm/gorun v0.0.23
+	github.com/tinywasm/gobuild v0.0.26
+	github.com/tinywasm/gorun v0.0.24
 )
 
 require (

@@ -22,10 +22,10 @@ github.com/tinywasm/fetch v0.1.24 h1:UynB2NPPgYrwcRx6ZujkRUTlfUUkNs60J0O63/1FmAs
 github.com/tinywasm/fetch v0.1.24/go.mod h1:Hx9bkdjC5fcf++EWjHKUzEn2OZpUbfoXNQV8tbdC5SI=
 github.com/tinywasm/fmt v0.24.6 h1:hdj/49rp3Vr/Ub+ICUb3BbEwo0R4a+8/8nJPnRPsEVQ=
 github.com/tinywasm/fmt v0.24.6/go.mod h1:L2GCAi6asgytPV6TVvGrRq5Ml+DkUt1Ijo5i/2J1jOY=
-github.com/tinywasm/gobuild v0.0.25 h1:DJmQS/mvYJW5eMflpTjhGGqkt1TD0yVl37brs2qmeGs=
-github.com/tinywasm/gobuild v0.0.25/go.mod h1:48JVlXnOy8ZBiz/vz5rWMxv4ZrQvB5Fbw22kOx6RfZY=
-github.com/tinywasm/gorun v0.0.23 h1:+2khVQCd1whCLYTP+AMC3lJVaKB6VOUYYXfj1Oj/tOY=
-github.com/tinywasm/gorun v0.0.23/go.mod h1:9pApF2ZoaH/km6kGBVxL5WlStOoLwEZiV1uG4R4qeKo=
+github.com/tinywasm/gobuild v0.0.26 h1:19Cyzb3nYlueWPRPEQNdTM6+OXTXuP5Ro+jNBYj3ptY=
+github.com/tinywasm/gobuild v0.0.26/go.mod h1:48JVlXnOy8ZBiz/vz5rWMxv4ZrQvB5Fbw22kOx6RfZY=
+github.com/tinywasm/gorun v0.0.24 h1:qduMrpcw0nf65nx8Fi2duBWN7pCIwXxePPa9KL0rmWM=
+github.com/tinywasm/gorun v0.0.24/go.mod h1:9pApF2ZoaH/km6kGBVxL5WlStOoLwEZiV1uG4R4qeKo=
 github.com/tinywasm/json v0.5.6 h1:pmIgQuQLV8kSqM8KQPLb/zHRJAfEJumFbNYcz1k+2wU=
 github.com/tinywasm/json v0.5.6/go.mod h1:cHfXpthSSgsUOQtFXk+ZoxTey3cC2JfQ/n9A1WvBW6Y=
 github.com/tinywasm/mcp v0.1.13 h1:26Z77wrPa/9moQQ/AyHc4WAmJy59+Q+PBaVaY4gpIvc=

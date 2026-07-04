@@ -1,81 +1,32 @@
-# Plan — Refactor de `server` al contrato de enrutado `tinywasm/router`
+# server — Plan orchestrator index
 
-> Reemplaza al plan anterior ("Fix publicDir — server_public_dir"), **ya ejecutado**
-> (el template `server_basic.md` usa `lookupArg("server_public_dir")` y `app` pasa el
-> argumento). Este PLAN aborda la migración del servidor al contrato isomórfico
-> `github.com/tinywasm/router`. Autocontenido, en español.
+Two independent, self-contained plans are pending for this module. Neither has
+been dispatched/executed yet (confirmed: `strategies.go`/`server.go` still
+import `net/http`, no `github.com/tinywasm/router` dependency in `go.mod`,
+and `HandleFileEvent`'s event-gating bug is still present as of this write).
 
----
+| Order | Plan | Scope |
+|---|---|---|
+| 1 | [PLAN_ROUTER_REFACTOR.md](PLAN_ROUTER_REFACTOR.md) | Migrate `server`'s route-registration surface from `net/http` to `tinywasm/router`. Older, already in progress before the hot-reload investigation. |
+| 2 | [PLAN_HOTRELOAD.md](PLAN_HOTRELOAD.md) | Fix the fsnotify event-gating bug in `externalStrategy.HandleFileEvent` (silent reload-without-compile) + adopt `gobuild.Compiler`/`gorun.Runner` interfaces. Part of `../../docs/HOT_RELOAD_MASTER_PLAN.md` (Phase E). |
 
-## Reglas de Desarrollo
+## Why sequential, not parallel
 
-Las reglas del arnés viven en el **`AGENTS.md` de la raíz de esta librería** — léelo
-antes de cualquier cambio. Este PLAN no las repite; describe solo el *cómo*.
+Both plans touch `server/strategies.go` and `server/server.go`. Dispatching
+them in parallel risks merge conflicts on the same functions
+(`externalStrategy`, its constructor, `HandleFileEvent`). Dispatch
+`PLAN_ROUTER_REFACTOR.md` first since it predates this investigation; once
+merged, dispatch `PLAN_HOTRELOAD.md`. `PLAN_HOTRELOAD.md` itself still
+depends on `gobuild/docs/PLAN.md` and `gorun/docs/PLAN.md` (Phases A/B of
+the hot-reload master plan) being merged first, independent of the router
+refactor's timing — if the router refactor stalls, `PLAN_HOTRELOAD.md` can
+still be dispatched on its own once A/B are ready; it does not require the
+router refactor to be done first, only recommended to avoid conflicts.
 
-Alcance (responsabilidad única): orquestar el arranque/parada de un servidor local y
-sus estrategias. **No** debe definir su propia abstracción de rutas ni exponer tipos
-de `net/http` en su superficie pública.
+## How to dispatch
 
----
-
-## El contrato que consume (reexpresado para ser autocontenido)
-
-```go
-// package router (github.com/tinywasm/router)
-type Context interface { Method() string; Path() string; Body() []byte
-	GetHeader(k string) string; SetHeader(k, v string); WriteStatus(code int); Write([]byte) (int, error) }
-type HandlerFunc func(Context)
-type Router interface {
-	Get(path string, h HandlerFunc); Post(path string, h HandlerFunc)
-	Put(path string, h HandlerFunc); Delete(path string, h HandlerFunc)
-	Options(path string, h HandlerFunc); Handle(method, path string, h HandlerFunc)
-	Stream(path string, h StreamFunc); Socket(path string, h SocketFunc); Use(m ...Middleware)
-}
-```
-
----
-
-## Estado de partida
-
-- `type ServerStrategy interface { … }` con estrategias `internalStrategy` /
-  `externalStrategy`.
-- `internalStrategy` construye `http.NewServeMux()` y registra con
-  `mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request){ … })`; sirve con
-  `http.Server`.
-- La superficie de registro de rutas expone `*http.ServeMux` al exterior.
-
----
-
-## Cambios (antes → después)
-
-| Antes (`net/http`) | Después (`router`) |
-|---|---|
-| `RegisterRoutes(fn func(*http.ServeMux))` | `RegisterRoutes(fn func(router.Router))` |
-| `mux.HandleFunc(path, func(w,r))` | `r.Handle(method, path, func(router.Context))` |
-| `internalStrategy` construye y sirve un `*http.ServeMux` | sirve un **implementador** de `router.Router` (reutiliza el implementador nativo del ecosistema; no duplica uno) |
-
-`server` deja de exponer `*http.ServeMux`. El `http.ListenAndServe`/`http.Server`
-interno queda **encapsulado** detrás del implementador de `router.Router`; no aparece
-en la API.
-
----
-
-## Pasos de implementación
-
-1. Añadir dependencia `github.com/tinywasm/router` en `go.mod`.
-2. Cambiar las firmas públicas de registro de rutas de `*http.ServeMux` a
-   `router.Router`.
-3. Hacer que la estrategia interna sirva sobre un implementador nativo de
-   `router.Router` (reutilizado del ecosistema), no sobre un `ServeMux` propio.
-4. Adaptar los handlers internos a `router.HandlerFunc(router.Context)`.
-
----
-
-## Estrategia de pruebas y criterios de aceptación
-
-- **Sin `net/http` en la superficie pública:** ninguna firma exportada nombra
-  `http.ServeMux`/`http.Handler`/`http.ResponseWriter`. Verificable por búsqueda.
-- **Arranque/parada intactos:** los tests de ciclo de vida (start/stop/restart)
-  siguen pasando sobre el nuevo implementador.
-- **Registro por contrato:** un test registra una ruta vía `func(router.Router)` y
-  la sirve; el handler recibe un `router.Context`, no `w,r`.
+Per the `agents-workflow` skill, `codejob` only reads `docs/PLAN.md`. To
+dispatch one of the two plans above: copy its content into `docs/PLAN.md`
+(replacing this index temporarily), run `codejob`, and once merged restore
+this index file with the remaining plan copied in, or ask Claude to do the
+swap for you.
