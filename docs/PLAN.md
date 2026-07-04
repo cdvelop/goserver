@@ -1,399 +1,190 @@
-> Este plan se despacha vía el flujo CodeJob. Ver skill: agents-workflow.
-> Orquestado por `tinywasm/docs/ROUTER_ADAPTER_MASTER_PLAN.md` — **Fase 1**.
-> Depende de la **Fase 0** (`tinywasm/router` con cookies) ya publicada.
+> Continuación de `docs/CHECK_PLAN.md` (ya ejecutado, ver auditoría — 11/12 pasos
+> completos, build/vet/test verdes). Este plan cierra lo que quedó pendiente:
+> cobertura de tests faltante en `httpd` y, adicionalmente, pruebas de
+> concurrencia para dar por lista la librería para producción.
 
-# Plan — `tinywasm/server/httpd`: subpaquete "enchufe simple" que reutiliza el adaptador existente
-
-> **No se crea un módulo nuevo.** `router_adapter.go` (raíz del repo `tinywasm/server`)
-> ya implementa el contrato completo de `github.com/tinywasm/router`
-> (`httpRouter`/`httpContext`/`httpStreamer`/`httpRoute`, con cookies y `Routes()`
-> ya resueltos). Falta exponerlo como librería pública y añadirle las "baterías" de
-> servir HTTP (gzip, no-cache, estáticos, `/health`, RBAC). Este plan mueve ese
-> adaptador a un **subpaquete** `github.com/tinywasm/server/httpd` (mismo módulo,
-> mismo repo, mismo `go.mod`) y lo hace consumible tanto por el modo de desarrollo
-> (`internalStrategy`, TUI/watch) como por binarios de producción (`mjosefa-cms` y
-> por `templates/server_basic.md`, la plantilla que hoy genera a mano el mismo
-> boilerplate cuando no existe `web/server.go` o se activa el modo `external`).
+# Plan — Cerrar cobertura de tests de `tinywasm/server/httpd`
 
 ---
 
-## Por qué subpaquete y no módulo nuevo
+## Excepción de ubicación aceptada
 
-- **Cero colisión de nombres:** el paquete raíz `server` ya exporta `Config` y
-  `New()` para `ServerHandler` (el orquestador de desarrollo con TUI/watch/
-  compilación). Un subpaquete `httpd` tiene su propio namespace — `httpd.Config`,
-  `httpd.New` — sin invadir la superficie existente.
-- **Una sola implementación del adaptador.** Hoy `router_adapter.go` vive sin
-  exportar en la raíz y solo lo usa `internalStrategy` (servidor en memoria del modo
-  dev, `strategies.go:65-66`). Moverlo a `httpd` y hacer que `internalStrategy`
-  lo importe desde ahí elimina cualquier riesgo de que las dos copias diverjan.
-- **Mismo repo, mismo ciclo de release.** Los consumidores externos (`mjosefa-cms`)
-  ya dependerán de `github.com/tinywasm/server`; añadir el subpaquete no exige un
-  nuevo módulo en el registro ni un nuevo `AGENTS.md`.
+`AGENTS.md`/`CHECK_PLAN.md` piden que las pruebas de "baterías" (todo lo que se
+monta vía API pública: `httpd.New(...)`) vivan en caja negra, `package
+server_test`, bajo `tests/`. En la práctica `httpd` **no expone ningún tipo
+`net/http`** en su superficie pública (es la regla más importante del paquete,
+ver checklist de `CHECK_PLAN.md`), así que no hay forma de levantar el
+`http.Handler` real desde fuera del paquete sin abrir un socket real y pegarle
+por HTTP.
+
+**Decisión (aceptada por el usuario):** las pruebas de baterías se quedan donde
+están hoy, `httpd/batteries_test.go`, en `package httpd` (caja blanca), en vez
+de moverlas a `tests/`. Este plan solo **añade** los casos que faltan al mismo
+archivo (o a nuevos archivos `_test.go` dentro de `httpd/`), no reubica nada.
+
+---
+
+## Estado de partida
+
+`httpd/batteries_test.go` (`TestHTTPDBatteries`) ya cubre, todo en un único test
+monolítico que arma el handler a mano (sin pasar por `ListenAndServe`):
+
+1. `/health`
+2. Estático + `NoCache`
+3. Gzip
+4. RBAC — permitir
+5. RBAC — denegar (403)
+6. `/_routes` — habilitado
+
+**Huecos identificados en la auditoría de `CHECK_PLAN.md`:**
+
+- `Mount(...router.APIModule)` — nunca se prueba que un módulo externo reciba
+  sus rutas.
+- `Authorizer == nil` + ruta protegida → error de arranque (`validateRBAC` vía
+  `ListenAndServe`) — no probado.
+- `RoutesEndpoint: false` → `GET /_routes` debe dar `404` — no probado (solo se
+  prueba el caso `true`).
+- Los 3 modos TLS (`CertFile`/`KeyFile`, validación de arranque, `DevTLS`) — no
+  probados en absoluto; `tests/https_test.go` solo ejercita el helper legado
+  `WaitForPortListening` contra un `httptest` genérico, no el código TLS de
+  `httpd`.
+- **Concurrencia** — ningún test ejercita el servidor bajo carga concurrente.
+  Antes de llamarla lista para producción, la librería necesita demostrar que
+  no hay data races ni corrupción de estado bajo uso concurrente real
+  (`go test -race`).
 
 ---
 
 ## Reglas de Desarrollo
 
-> Ver `AGENTS.md` (raíz del repo) para las restricciones generales del proyecto.
-> La relevante aquí: **ubicación de tests** — todo lo que se pueda probar desde la
-> API pública va en `tests/` (paquete `server_test`, caja negra); solo un test que
-> necesite un identificador no exportado vive junto al código, y esa excepción
-> aplica por paquete, no solo en la raíz del repo (ver más abajo).
-
-- Todo el subpaquete `httpd/` lleva `//go:build !wasm`; aquí sí se permite stdlib
-  (`net/http`, `compress/gzip`, `io`) — nunca compila a WASM.
-- **`net/http` no aparece en la superficie pública** de `httpd`. Firmas exportadas
-  usan `httpd.Config`, `httpd.Server`, `router.Router`, `router.APIModule` —
-  nunca `http.ResponseWriter`/`http.Handler`/`*http.ServeMux`. `http.Server` queda
-  encapsulado tras `ListenAndServe()`.
-- **`internalStrategy` no cambia de comportamiento.** Solo se le reemplaza el
-  constructor del router (`newHTTPRouter(mux)` → `httpd.NewRouter(mux)`); el bucle
-  de arranque/parada/restart con `WaitGroup`/`ExitChan` de `strategies.go` se
-  conserva intacto.
-- **Tests del adaptador (`httpContext`/`httpRouter`/`httpRoute`) son caja blanca**
-  (necesitan los no-exportados) → viven en `server/httpd/adapter_test.go`, junto al
-  paquete `httpd`, no en `tests/`. **Tests de las baterías** (`middleware.go`,
-  `static.go`, `enforce.go`, `routes_endpoint.go`, `httpd.go`) se prueban desde la
-  API pública (`httpd.New(...)` + `httptest`) → van en `tests/`, como
-  `tests/httpd_test.go` (paquete `server_test`).
-
----
-
-## Estado de partida (en `router_adapter.go`, raíz del repo)
-
-Ya implementado y con test (`router_adapter_test.go`) — **se mueve, no se reescribe**:
-
-- `httpContext` completo: `Method/Path/Body/GetHeader/SetHeader/WriteStatus/Write/
-  SetValue/Value/SetCookie/Cookie` (cookies con `mapSameSite` vía switch, sin enteros
-  mágicos).
-- `httpStreamer` (`Flush`).
-- `httpRouter`: `Get/Post/Put/Delete/Options/Handle/Stream/Socket/Use/Routes`;
-  aplica middlewares en orden inverso; `Socket` es stub `501`.
-- `httpRoute.Requires` graba `(resource, action)` en un `router.RouteInfo` interno.
-- Aserciones de contrato: `var _ router.Context = (*httpContext)(nil)`, etc.
-
-**No implementado todavía (lo que aporta este plan):** las baterías de servir HTTP
-(gzip, no-cache, estáticos, `/health`, enforcement RBAC, `/_routes`) y la fachada
-`Config`/`New`/`Mount`/`ListenAndServe`.
-
----
-
-## API pública objetivo
-
-```go
-//go:build !wasm
-
-package httpd // github.com/tinywasm/server/httpd
-
-import "github.com/tinywasm/router"
-
-const (
-	DefaultPort      = "8080"
-	DefaultPublicDir = "public" // relativo: el binario corre con cwd=web/
-	HealthPath       = "/health"
-	RoutesPath       = "/_routes"
-)
-
-// Config declara el servidor. httpd NO lee argv/env — es responsabilidad del
-// consumidor (main()) resolver Port/PublicDir/NoCache desde CLI args o entorno
-// (vía tinywasm/env) y pasarlos ya resueltos aquí. Los ceros de Port/PublicDir
-// son defaults documentados (ver DefaultPort/DefaultPublicDir); Gzip y Health
-// no tienen "default silencioso" — el consumidor los fija explícitamente
-// (normalmente Gzip:true, Health:true, fijos) porque casi nunca cambian entre
-// entornos. NoCache sí varía por entorno (activado en dev, desactivado en
-// producción) y por eso el consumidor lo resuelve dinámicamente — ver el
-// ejemplo de uso más abajo.
-type Config struct {
-	Port      string
-	PublicDir string // "" = no servir estáticos
-	Gzip      bool
-	NoCache   bool
-	Health    bool
-	Logger    func(...any)
-
-	Identify       func(ctx router.Context) string
-	Authorizer     func(userID, resource, action string) bool
-	RoutesEndpoint bool
-
-	// --- HTTPS: exactamente un modo activo, o ninguno (HTTP plano) ---
-	TLS TLSConfig
-}
-
-// TLSConfig selecciona el modo HTTPS. Campos explícitos por modo — no un solo
-// `Https bool` que adivine según qué otros campos vengan rellenos: cada modo
-// tiene su propio conjunto de campos requeridos y New() valida al arrancar que
-// como máximo uno esté activo (nunca en runtime).
-type TLSConfig struct {
-	// AutoCert: ACME/Let's Encrypt automático. Requiere Domain accesible desde
-	// internet en :80/:443. Vía golang.org/x/crypto/acme/autocert (oficial Go).
-	AutoCert bool
-	Domain   string // requerido si AutoCert; New() falla si falta
-
-	// CertFile/KeyFile: certificado ya emitido (CA propia/interna, o cualquier
-	// CA), para producción sin salida a internet. Sin dependencias — stdlib
-	// tls.LoadX509KeyPair. Ambos requeridos juntos.
-	CertFile string
-	KeyFile  string
-
-	// DevTLS: self-signed local para desarrollo/offline. httpd genera una CA +
-	// certificado local (stdlib, cacheados en disco) e instala la CA en el
-	// almacén de confianza del SO/navegador (github.com/smallstep/truststore,
-	// misma librería que usa mkcert) para que no salga warning. Requiere
-	// permisos de sistema la primera vez (sudo/UAC) — ver "Fallback" abajo.
-	DevTLS bool
-}
-
-type Server struct{ /* privado */ }
-
-// New construye el servidor con Config (aplica defaults sobre los ceros).
-func New(c Config) *Server
-
-// Router expone el adaptador ya existente para registrar rutas directamente.
-func NewRouter(mux *http.ServeMux) router.Router // exportado; lo reusa internalStrategy
-
-func (s *Server) Router() router.Router
-func (s *Server) Mount(m ...router.APIModule) *Server
-func (s *Server) ListenAndServe() error
-```
-
-Uso objetivo (el mismo "enchufe simple" que ya usa `mjosefa-cms`). `Port`/`PublicDir`
-se resuelven vía `env.Arg` con fallback al default (mismo patrón que ya usa el
-`main()` generado hoy por `templates/server_basic.md`, `lookupArg`); `NoCache` se
-resuelve igual — dinámico por entorno, no fijo — y `Gzip`/`Health` van fijos porque
-no cambian entre entornos:
-
-```go
-port := env.Arg(argPort)
-if port == "" {
-	port = httpd.DefaultPort
-}
-publicDir := env.Arg(argPublicDir)
-if publicDir == "" {
-	publicDir = httpd.DefaultPublicDir
-}
-noCache := env.Arg(argNoCache) == "true" // default false: caché activada en producción
-
-httpd.New(httpd.Config{
-	Port: port, PublicDir: publicDir, Gzip: true, NoCache: noCache, Health: true,
-}).
-	Mount(mcpServer).
-	ListenAndServe()
-```
-
----
-
-## Estructura interna (archivos del subpaquete `server/httpd/`)
-
-- `adapter.go` — **contenido movido tal cual** desde `router_adapter.go` de la raíz
-  (con su test). Único cambio: exportar el constructor como
-  `func NewRouter(mux *http.ServeMux) router.Router` (hoy `newHTTPRouter`, no
-  exportado). El resto (`httpContext`, `httpStreamer`, `httpRouter`, `httpRoute`,
-  cookies, `Routes()`) se mantiene sin tocar.
-- `httpd.go` — `Config`, `applyDefaults`, `New`, `Server`, `Router`, `Mount`,
-  `ListenAndServe` (arma `*http.ServeMux`, cadena de baterías, `/health`, `/_routes`,
-  `http.Server`).
-- `middleware.go` — `gzip` y `noCache` como `router.Middleware` (operan sobre
-  `router.Context`, no sobre `http.Handler`), portados 1:1 desde la lógica ya
-  probada en `mjosefa-cms/web/server.go` y en `templates/server_basic.md`.
-- `static.go` — sirve `Config.PublicDir` en `/` (envuelve `http.FileServer`
-  internamente).
-- `enforce.go` — por cada `RouteInfo` con `Resource != ""`: `Identify` → si
-  `!Authorizer(userID, resource, action)` → `403`. **Diagnóstico ruidoso:** ruta
-  protegida + `Authorizer == nil` → `New`/`ListenAndServe` devuelve error al
-  arrancar, nunca en runtime.
-- `routes_endpoint.go` — si `Config.RoutesEndpoint`, `GET /_routes` serializa
-  `Router().Routes()` a JSON con `tinywasm/json`.
-- `tls.go` — resuelve `Config.TLS` a un `*tls.Config` (o nil = HTTP plano) y
-  decide qué `net.Listener`/método de arranque usar. **Valida al arrancar** (no
-  en runtime) que como máximo un modo esté activo; error inmediato si:
-  `AutoCert && Domain == ""`, o `(CertFile == "") != (KeyFile == "")`, o dos
-  modos activos a la vez.
-  - `AutoCert`: envuelve `golang.org/x/crypto/acme/autocert.Manager` (cache en
-    disco vía `autocert.DirCache`); `ListenAndServe` usa
-    `manager.Listener()`/`GetCertificate`.
-  - `CertFile`/`KeyFile`: `tls.LoadX509KeyPair` (stdlib), sin dependencias.
-  - `DevTLS`: `devcert.go` — genera CA local + certificado leaf para
-    `localhost`/`127.0.0.1` (stdlib `crypto/x509`/`crypto/ecdsa`), cacheados en
-    un dir local (p. ej. `~/.tinywasm/httpd/certs`, reutilizado entre arranques
-    para no regenerar ni reinstalar cada vez). Instala la CA en el almacén de
-    confianza del SO con `github.com/smallstep/truststore` (mismo mecanismo que
-    `mkcert`, cross-platform: NSS/certutil en Linux, Keychain en macOS,
-    CryptoAPI en Windows) — **una sola vez** (verifica antes si ya está
-    instalada, evita pedir sudo/UAC en cada arranque). Si la instalación falla
-    (sin permisos, entorno headless/CI): loguea el warning vía `Config.Logger`
-    y sirve igual con el cert self-signed sin confiar — el navegador mostrará
-    advertencia, pero el servidor funciona (nunca bloquea el arranque por esto).
-
-## Cambio en el resto del repo (para eliminar la duplicación)
-
-- `strategies.go:65-66` (`internalStrategy.Start`): cambiar
-  `r := newHTTPRouter(mux)` por `r := httpd.NewRouter(mux)`, importando
-  `github.com/tinywasm/server/httpd`. Sin más cambios en `strategies.go` — el
-  bucle de arranque/parada/`ExitChan`/`WaitGroup` del modo dev no se toca.
-- Eliminar `router_adapter.go` y `router_adapter_test.go` de la raíz del repo (ya
-  movidos a `httpd/adapter.go` / `httpd/adapter_test.go`).
-- `templates/server_basic.md` (usado por `generator.go` cuando no existe
-  `web/server.go`, o al activar `SetExternalServerMode(true)`): reemplazar el
-  boilerplate `net/http` (gzip/noCache/FileServer/mux/`/health`/`http.Server`,
-  líneas 8-101 hoy) por:
-
-  ```go
-  //go:build !wasm
-
-  package main
-
-  import "github.com/tinywasm/env"
-  import "github.com/tinywasm/server/httpd"
-
-  const (
-  	argPort      = "server_port"
-  	argPublicDir = "server_public_dir"
-  	argNoCache   = "server_no_cache"
-  )
-
-  func main() {
-  	port := env.Arg(argPort)
-  	if port == "" {
-  		port = "{{.AppPort}}"
-  	}
-  	publicDir := env.Arg(argPublicDir)
-  	if publicDir == "" {
-  		publicDir = "{{.PublicDir}}"
-  	}
-
-  	httpd.New(httpd.Config{
-  		Port:      port,
-  		PublicDir: publicDir,
-  		Gzip:      true,
-  		NoCache:   env.Arg(argNoCache) == "true", // default false: caché activada
-  		Health:    true,
-  	}).ListenAndServe()
-  }
-  ```
-
-  Conserva la posibilidad de sobreescribir `Port`/`PublicDir` por CLI arg que ya
-  tenía el template legado (`lookupArg`, ahora `env.Arg`), y añade `server_no_cache`
-  con el mismo mecanismo: `tinywasm/app` (u otro orquestador de dev) lo activa
-  pasando `-server_no_cache=true` en `SetRunArgs` cuando `DevMode` está activo;
-  en producción, sin el flag, `NoCache` queda `false` (caché normal del navegador).
-
-  Esto es lo que verán los proyectos que **no** tienen `web/server.go` propio (o que
-  activan modo `external` sin haberlo personalizado) — deja de generarse boilerplate
-  copiado, se genera un enchufe a `httpd`.
+- Todo vive en `httpd/*_test.go`, `//go:build !wasm` implícito (el paquete
+  entero ya lo es).
+- Todo el paquete debe pasar con `go test -race ./...` — no solo `go test`.
+- Los tests que arrancan un servidor real (TLS, concurrencia) usan
+  `s.config.Port = "0"` no es viable porque `ListenAndServe()` no expone el
+  puerto asignado por el SO (limitación conocida y documentada más abajo, ver
+  "Deuda técnica"). Mientras tanto, estos tests fijan un puerto libre obtenido
+  de antemano con `net.Listen("tcp", ":0")` + `Close()` inmediato (patrón
+  estándar de Go para tests, hay una ventana de carrera teórica pero aceptable
+  para CI) y arrancan el servidor en una goroutine.
+- Ningún test debe bloquear el proceso: los servidores arrancados con
+  `ListenAndServe()` en goroutine no tienen forma pública de detenerse (no hay
+  `Shutdown()`) — los tests los dejan corriendo y confían en que el proceso de
+  test termine (mismo patrón ya usado, implícitamente, por cualquier test que
+  quisiera probar un puerto real). Ver "Deuda técnica" para la solución
+  correcta a mediano plazo.
 
 ---
 
 ## Pasos de implementación
 
-1. Crear `server/httpd/` (subpaquete, mismo `go.mod`). Mover `router_adapter.go` →
-   `httpd/adapter.go`, `router_adapter_test.go` → `httpd/adapter_test.go`;
-   exportar `newHTTPRouter` → `NewRouter`. Ajustar el `package` de ambos archivos a
-   `httpd`.
-2. `strategies.go`: importar `github.com/tinywasm/server/httpd`; reemplazar
-   `newHTTPRouter(mux)` por `httpd.NewRouter(mux)` en `internalStrategy.Start`.
-   Correr los tests existentes del modo dev (`tests/modes_test.go`,
-   `tests/startserver_integration_test.go`) para confirmar que no cambia el
-   comportamiento.
-3. `httpd/middleware.go`: portar `gzip`/`noCache` desde `templates/server_basic.md`
-   / `mjosefa-cms/web/server.go`, como `router.Middleware`.
-4. `httpd/static.go`: servir `PublicDir` en `/`.
-5. `httpd/enforce.go`: envoltura RBAC por ruta + validación de arranque.
-6. `httpd/routes_endpoint.go`: `GET /_routes` (gated por `Config.RoutesEndpoint`).
-7. `httpd/httpd.go`: `Config` + defaults, `New`, `Router`, `Mount`,
-   `ListenAndServe` (mux + baterías + `/health` + `/_routes` + `http.Server`).
-8. `templates/server_basic.md`: reemplazar el boilerplate por el enchufe a
-   `httpd` (ver arriba). Actualizar `tests/generator_test.go` si compara contenido
-   generado con literal esperado.
-9. `docs/ARCHITECTURE.md`: documentar `httpd` como el único implementador nativo
-   de `router.Router` del ecosistema; su relación con `internalStrategy` (modo dev,
-   lo consume) y con `templates/server_basic.md` (modo external/generado, lo usa).
-10. `tests/httpd_test.go` (nuevo, `package server_test`): los 6 casos de
-    `httptest` sobre las baterías (ver "Estrategia de pruebas"), montados vía
-    `httpd.New(...)` — API pública, por eso van en `tests/` y no en `httpd/`
-    (ver `AGENTS.md`).
-11. `httpd/tls.go` + `httpd/devcert.go`: resolución de `Config.TLS` (los tres
-    modos), validación de arranque (a lo sumo un modo activo; `AutoCert` exige
-    `Domain`; `CertFile`/`KeyFile` van en pareja). `go.mod`: añadir
-    `golang.org/x/crypto` (para `acme/autocert`) y `github.com/smallstep/truststore`.
-12. `strategies.go`/`server.go`: el `Https bool` ya existente en `ServerHandler.Config`
-    (hoy solo afecta `WaitForPortListening`/`OpenBrowser`, no sirve TLS de verdad)
-    pasa a mapear a `httpd.TLSConfig{DevTLS: true}` cuando `internalStrategy` arma
-    su servidor — así el modo dev también sirve HTTPS real vía `httpd`, no solo
-    simula el esquema de la URL.
+1. **`httpd/mount_test.go`** — `TestMount`: un `fakeAPIModule` con
+   `MountAPI(r router.Router)` que registra `GET /mounted`; `s := New(cfg);
+   s.Mount(fakeAPIModule{})`; verificar con una petición sintética (a través del
+   mismo patrón manual que ya usa `TestHTTPDBatteries`, armando el handler con
+   `s.wrapWithBatteries(s.mux)`) que la ruta responde.
+
+2. **`httpd/enforce_test.go`** — `TestRBACMissingAuthorizerFailsAtStartup`:
+   registrar una ruta con `.Requires("res","action")`, no configurar
+   `Authorizer`, llamar `s.ListenAndServe()` en un puerto ya ocupado (o mejor:
+   llamar directamente a `s.validateRBAC()` ya que es lo que `ListenAndServe`
+   invoca primero, evitando el problema de puertos) y afirmar que devuelve
+   error no nil con el recurso en el mensaje.
+
+3. **`httpd/routes_endpoint_test.go`** — `TestRoutesEndpointDisabled`:
+   `Config{RoutesEndpoint: false}`, pegarle a `/_routes` a través del handler
+   armado a mano, afirmar `404` (comportamiento nativo de `http.ServeMux`
+   cuando no se registró el patrón).
+
+4. **`httpd/tls_test.go`**:
+   - `TestValidateTLS_RejectsMultipleModes`: `TLS{DevTLS: true, CertFile: "a",
+     KeyFile: "b"}` → `validateTLS()` error.
+   - `TestValidateTLS_AutoCertRequiresDomain`: `TLS{AutoCert: true}` sin
+     `Domain` → error.
+   - `TestValidateTLS_CertKeyMustBePaired`: solo `CertFile` sin `KeyFile` →
+     error.
+   - `TestTLS_CertFileKeyFile_Serves`: generar cert+key de prueba en el test
+     (stdlib `crypto/tls`/`crypto/x509`/`crypto/ecdsa`, self-signed, escritos a
+     `t.TempDir()`), arrancar `ListenAndServe()` en goroutine con puerto libre
+     pre-reservado, cliente `http.Client{Transport: &http.Transport{TLSClientConfig:
+     &tls.Config{InsecureSkipVerify: true}}}` pega a `https://127.0.0.1:<puerto>/health`
+     y espera `200`.
+   - `TestDevTLS_ServesWithoutBlockingOnTruststoreFailure` — `t.Skip` si
+     `testing.Short()` o si no hay entorno gráfico/permite de instalar
+     truststore (CI headless): arrancar con `TLS{DevTLS: true}`, verificar que
+     el server sirve por HTTPS igual aunque la instalación de la CA falle
+     (capturar el warning vía `Config.Logger`).
+
+5. **`httpd/concurrency_test.go`** — pruebas de concurrencia para producción
+   (ver detalle abajo).
+
+6. Correr `go test -race ./...` en el módulo completo; corregir cualquier data
+   race real que aparezca (no silenciar con `-race` deshabilitado).
 
 ---
 
-## Code Quality Checklist (obligatorio)
+## Pruebas de concurrencia (producción)
 
-- **Sin literales repetidos → constantes tipadas.** `DefaultPort`, `DefaultPublicDir`,
-  `HealthPath`, `RoutesPath`, cabeceras de cache-control, `Accept-Encoding`/`gzip`
-  como constantes.
-- **`net/http` fuera de la superficie pública de `httpd`.** Verificable:
-  `grep 'http\.' ` sobre identificadores exportados no debe aparecer.
-- **Fallar en arranque, no en runtime.** Ruta protegida sin `Authorizer` → error en
-  `New`/`ListenAndServe`.
-- **Una sola forma.** Único camino: `New(...).Mount(...).ListenAndServe()`.
-- **`internalStrategy` sin duplicar el adaptador.** Debe importar `httpd.NewRouter`,
-  no mantener una copia local.
-- **`httpd` no importa nada de la raíz del paquete `server`** (evita import cycle:
-  la raíz sí puede importar `httpd`, al revés no).
-- **A lo sumo un modo TLS activo, validado en `New`.** `AutoCert && (CertFile != "" || DevTLS)`,
-  o `Domain == ""` con `AutoCert`, o `CertFile`/`KeyFile` incompletos → error
-  inmediato, nunca un `ListenAndServe` que falla a mitad de arranque.
-  Nunca en runtime.
-- **`DevTLS` nunca bloquea el arranque por no poder instalar la CA.** Fallo de
-  `truststore` (sin permisos, headless) → warning por `Logger`, sirve igual con
-  el cert sin confiar.
+Objetivo: demostrar que `httpd.Server` es seguro bajo tráfico concurrente real
+y bajo registro/lectura concurrente de rutas, que es el patrón de uso esperado
+(`Mount` se puede llamar desde múltiples inicializadores; el router se lee en
+cada request).
 
----
+1. **`TestConcurrentRequests_NoRace`** — arrancar un servidor real (puerto
+   libre pre-reservado, `ListenAndServe()` en goroutine) con: una ruta estática
+   servida desde `PublicDir`, una ruta API normal, una ruta con `Requires` +
+   `Authorizer`, gzip y health habilitados. Lanzar N (p. ej. 200) goroutines de
+   cliente que hacen peticiones concurrentes mezclando los cuatro tipos de ruta
+   (`/health`, `/test.txt`, `/api/hello`, `/api/secret` con y sin header de
+   usuario válido). Correr con `go test -race`; el objetivo es que el detector
+   de razas no dispare, no solo que las respuestas sean `200`/`403` correctas.
 
-## Estrategia de pruebas y criterios de aceptación
+2. **`TestConcurrentRouteRegistration`** — caja blanca sobre `httpRouter`
+   (ya vive en `httpd/adapter_test.go` o un nuevo `adapter_concurrency_test.go`):
+   registrar rutas (`Get`/`Post`/etc.) desde varias goroutines concurrentes
+   *antes* de servir tráfico, y simultáneamente desde otra goroutina llamar
+   `Routes()` en bucle corto. Confirma que `routes []route` (el slice interno)
+   no se lee/escribe sin sincronización — si `-race` dispara aquí, hay que
+   añadir un `sync.RWMutex` a `httpRouter` (cambio de código real, no solo de
+   test, documentado como hallazgo si aplica).
 
-> Ubicación regida por `AGENTS.md`: caja blanca (no-exportados) junto al paquete,
-> todo lo demás en `tests/`.
+3. **`TestConcurrentAuthorizerCalls`** — múltiples goroutinas golpeando una
+   ruta protegida simultáneamente con distintos `X-User`, confirmando que
+   `Authorizer` (función provista por el consumidor, potencialmente con estado
+   compartido como un mapa de permisos) se invoca de forma segura y que
+   `setAuthorizer` (llamado una sola vez desde `ListenAndServe`) no compite con
+   las lecturas que hace cada request — si `Identify`/`Authorizer` se guardan
+   en campos del `httpRouter` sin mutex y se leen por request, `-race` lo
+   revela aquí.
 
-- `gotest`. Solo nativo (`!wasm`).
-- Aserciones de contrato ya existentes (caja blanca, `httpContext`/`httpRouter`
-  internos) se conservan tal cual en `httpd/adapter_test.go`.
-- Nuevos casos con `httptest` en `tests/httpd_test.go` (`package server_test`,
-  vía API pública `httpd.New(...)`):
-  1. `PublicDir` sirve un archivo con cabeceras no-cache cuando `NoCache:true`.
-  2. `Gzip:true` + `Accept-Encoding: gzip` → `Content-Encoding: gzip` en la respuesta.
-  3. `Health:true` → `GET /health` responde `200 "ok"`.
-  4. Un `router.APIModule` de prueba montado con `Mount` recibe sus rutas.
-  5. RBAC: ruta con `Requires("res","write")`; `Authorizer` que niega → `403`; que
-     concede → `200`; `Authorizer==nil` + ruta protegida → error en `New`.
-  6. `RoutesEndpoint:true` → `GET /_routes` devuelve JSON con `RouteInfo`; `false` → `404`.
-  7. `TLS.CertFile`/`KeyFile` con un cert de prueba (generado en el test, stdlib) →
-     servidor responde por HTTPS con ese certificado.
-  8. Validación de arranque: `TLS.AutoCert:true` sin `Domain` → `New` devuelve
-     error; dos modos TLS activos a la vez → error.
-  9. `DevTLS` (aislado, `t.Skip` en CI sin permisos de sistema o headless):
-     genera cert local y sirve HTTPS; no verifica instalación real en el
-     truststore del CI, solo que el servidor arranca y sirve con el cert
-     generado aunque la instalación falle (Logger recibe el warning).
-- Tests existentes del modo dev (`tests/modes_test.go`, `tests/startserver_integration_test.go`,
-  `tests/restart_on_fix_test.go`) siguen pasando sin cambios de comportamiento tras el
-  paso 2.
-- `templates/server_basic.md`: `tests/generator_test.go` actualizado para esperar el
-  nuevo contenido (enchufe a `httpd`, no boilerplate `net/http`).
+4. **`TestGracefulUnderLoad`** *(opcional, solo si se resuelve la deuda técnica
+   de `Shutdown()` en el punto 2 de "Deuda técnica")*: enviar tráfico
+   concurrente y disparar `Shutdown()` a mitad de carga, confirmar que las
+   conexiones en vuelo terminan limpio y las nuevas son rechazadas. Bloqueado
+   hasta que exista `Shutdown()` en la API pública.
+
+**Criterio de aceptación de esta sección:** `go test -race ./httpd/...` limpio,
+cero warnings del detector de razas, en al menos 3 corridas consecutivas (las
+razas son no determinísticas — una corrida limpia no es suficiente evidencia).
 
 ---
 
-## Tabla de etapas
+## Deuda técnica identificada durante este plan (no bloquea la sección de tests, pero limita qué se puede probar)
 
-| Etapa | Archivo | Acción |
-|---|---|---|
-| 1 | `server/httpd/adapter.go` (+ test) | Mover `router_adapter.go`; exportar `NewRouter` |
-| 2 | `strategies.go` | `internalStrategy` usa `httpd.NewRouter` en vez de la copia local |
-| 3 | `server/httpd/middleware.go` | `gzip`/`noCache` como `router.Middleware` |
-| 4 | `server/httpd/static.go` | Servir `PublicDir` en `/` |
-| 5 | `server/httpd/enforce.go` | RBAC por ruta + validación de arranque |
-| 6 | `server/httpd/routes_endpoint.go` | `GET /_routes` (gated) |
-| 7 | `server/httpd/httpd.go` | `Config`+defaults, `New`, `Router`, `Mount`, `ListenAndServe`, `/health` |
-| 8 | `templates/server_basic.md` | Reemplazar boilerplate por enchufe a `httpd` |
-| 9 | `docs/ARCHITECTURE.md` | Documentar relación httpd ↔ internalStrategy ↔ template |
-| 10 | `tests/httpd_test.go` | 9 casos `httptest` de las baterías + TLS, vía API pública (`AGENTS.md`) |
-| 11 | `server/httpd/tls.go`, `server/httpd/devcert.go`, `go.mod` | 3 modos TLS; deps `x/crypto` + `smallstep/truststore` |
-| 12 | `strategies.go`, `server.go` | `ServerHandler.Https` mapea a `httpd.TLSConfig{DevTLS:true}` (HTTPS real en modo dev) |
+1. **No hay forma de obtener el puerto real asignado** cuando `Config.Port` es
+   `"0"` o cuando se usa un listener externo — `ListenAndServe()` construye y
+   descarta el `net.Listener` internamente. Los tests de esta sección
+   sortean esto reservando el puerto por fuera (`net.Listen` + `Close()`
+   inmediato), lo cual tiene una ventana de carrera teórica entre procesos.
+   Solución correcta a mediano plazo: exponer `func (s *Server) Addr() string`
+   (poblado después de que el listener interno bindee) sin filtrar
+   `net.Listener`/`http.*` en la firma — compatible con la regla de "sin
+   `net/http` en la superficie pública".
+2. **No hay `Shutdown()` / `Close()` público.** Los servidores arrancados en
+   goroutine durante los tests quedan corriendo hasta que el proceso de test
+   termina. Para producción real (no solo tests) esto también es una limitación
+   operativa: un consumidor de `httpd` no tiene manera de apagar el servidor
+   ordenadamente (p. ej. en un `SIGTERM` de contenedor). Se recomienda añadir
+   `func (s *Server) Shutdown(ctx context.Context) error` que delegue a
+   `http.Server.Shutdown` internamente (sin exponer el tipo `http.Server`).
+   Este punto es candidato a su propio mini-plan si el usuario lo prioriza.

@@ -64,20 +64,13 @@ func TestGenerateCreatesFile(t *testing.T) {
 	if !strings.Contains(content, "9090") {
 		t.Errorf("generated file missing substituted AppPort (9090)")
 	}
-	// Verify manual arg parsing (no flag package)
-	if !strings.Contains(content, `lookupArg`) {
-		t.Errorf("generated file missing lookupArg function")
+	// Verify it uses httpd
+	if !strings.Contains(content, `httpd.New`) {
+		t.Errorf("generated file missing httpd.New")
 	}
-	if strings.Contains(content, `flag.Parse`) {
-		t.Errorf("generated file must not use flag.Parse")
-	}
-	// Verify it reads server_port arg
-	if !strings.Contains(content, `lookupArg("server_port")`) {
-		t.Errorf("generated file missing lookupArg(\"server_port\")")
-	}
-	// Verify noCache middleware exists
-	if !strings.Contains(content, `noCache`) {
-		t.Errorf("generated file missing noCache middleware")
+	// Verify it uses env.Arg
+	if !strings.Contains(content, `env.Arg(argPort)`) {
+		t.Errorf("generated file missing env.Arg(argPort)")
 	}
 	// Verify default public dir
 	if !strings.Contains(content, `web/public`) {

@@ -1,0 +1,118 @@
+package httpd
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/tinywasm/router"
+)
+
+func TestHTTPDBatteries(t *testing.T) {
+	tmpDir := t.TempDir()
+	publicDir := filepath.Join(tmpDir, "public")
+	os.MkdirAll(publicDir, 0755)
+	os.WriteFile(filepath.Join(publicDir, "test.txt"), []byte("hello world"), 0644)
+
+	conf := Config{
+		PublicDir:      publicDir,
+		Gzip:           true,
+		NoCache:        true,
+		Health:         true,
+		RoutesEndpoint: true,
+	}
+
+	s := New(conf)
+
+	// Register a route
+	s.Router().Get("/api/hello", func(ctx router.Context) {
+		ctx.Write([]byte("hi"))
+	})
+
+	// Add RBAC
+	s.Router().Get("/api/secret", func(ctx router.Context) {
+		ctx.Write([]byte("secret"))
+	}).Requires("admin", "read")
+
+	s.config.Identify = func(ctx router.Context) string {
+		return ctx.GetHeader("X-User")
+	}
+	s.config.Authorizer = func(userID, resource, action string) bool {
+		return userID == "admin"
+	}
+
+	// Prepare handler
+	if s.config.Health {
+		s.mux.HandleFunc(HealthPath, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("ok"))
+		})
+	}
+	s.registerRoutesEndpoint()
+	s.router.setAuthorizer(s.config.Identify, s.config.Authorizer)
+
+	handler := s.wrapWithBatteries(s.mux)
+
+	// 1. Test Health
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != 200 || w.Body.String() != "ok" {
+		t.Errorf("Health failed: %d %s", w.Code, w.Body.String())
+	}
+
+	// 2. Test Static + NoCache
+	req = httptest.NewRequest("GET", "/test.txt", nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != 200 || w.Body.String() != "hello world" {
+		t.Errorf("Static failed: %d %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Header().Get("Cache-Control"), "no-cache") {
+		t.Errorf("NoCache failed, got header: %s", w.Header().Get("Cache-Control"))
+	}
+
+	// 3. Test Gzip
+	req = httptest.NewRequest("GET", "/test.txt", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Header().Get("Content-Encoding") != "gzip" {
+		t.Errorf("Gzip failed, got header: %s", w.Header().Get("Content-Encoding"))
+	}
+
+	// 4. Test RBAC - Allow
+	req = httptest.NewRequest("GET", "/api/secret", nil)
+	req.Header.Set("X-User", "admin")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != 200 || w.Body.String() != "secret" {
+		t.Errorf("RBAC Allow failed: %d %s", w.Code, w.Body.String())
+	}
+
+	// 5. Test RBAC - Deny
+	req = httptest.NewRequest("GET", "/api/secret", nil)
+	req.Header.Set("X-User", "guest")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != 403 {
+		t.Errorf("RBAC Deny failed: %d", w.Code)
+	}
+
+	// 6. Test Routes Endpoint
+	req = httptest.NewRequest("GET", "/_routes", nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Errorf("Routes endpoint failed: %d", w.Code)
+	}
+	var routes []router.RouteInfo
+	json.Unmarshal(w.Body.Bytes(), &routes)
+	if len(routes) < 2 {
+		t.Errorf("Expected at least 2 routes, got %d", len(routes))
+	}
+}

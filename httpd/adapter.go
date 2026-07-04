@@ -1,4 +1,4 @@
-package server
+package httpd
 
 import (
 	"io"
@@ -130,9 +130,15 @@ func (s *httpStreamer) Flush() {
 }
 
 type httpRouter struct {
-	mux         *http.ServeMux
-	middlewares []router.Middleware
-	routes      []*httpRoute
+	mux               *http.ServeMux
+	mu                sync.RWMutex
+	middlewares       []router.Middleware
+	globalMiddlewares []router.Middleware
+	routes            []*httpRoute
+
+	// Authorizer info to be used by enforced RBAC
+	identify   func(ctx router.Context) string
+	authorizer func(userID, resource, action string) bool
 }
 
 type httpRoute struct {
@@ -145,32 +151,84 @@ func (r *httpRoute) Requires(resource string, action string) router.Route {
 	return r
 }
 
-func newHTTPRouter(mux *http.ServeMux) *httpRouter {
+func NewRouter(mux *http.ServeMux) router.Router {
 	return &httpRouter{
 		mux: mux,
 	}
 }
 
 func (r *httpRouter) Use(m ...router.Middleware) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.middlewares = append(r.middlewares, m...)
 }
 
-func (r *httpRouter) Handle(method, path string, h router.HandlerFunc) router.Route {
-	wrapped := h
-	// Apply middlewares in order: mw[0] wraps innermost, mw[len-1] wraps outermost
-	// This way, mw[len-1] (last added) executes first
-	for i := 0; i < len(r.middlewares); i++ {
-		wrapped = r.middlewares[i](wrapped)
-	}
+func (r *httpRouter) useGlobal(m ...router.Middleware) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.globalMiddlewares = append(r.globalMiddlewares, m...)
+}
 
+func (r *httpRouter) setAuthorizer(identify func(router.Context) string, authorizer func(string, string, string) bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.identify = identify
+	r.authorizer = authorizer
+}
+
+func (r *httpRouter) Handle(method, path string, h router.HandlerFunc) router.Route {
 	route := &httpRoute{info: router.RouteInfo{Method: method, Path: path}}
+	r.mu.Lock()
 	r.routes = append(r.routes, route)
+	r.mu.Unlock()
 
 	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
 		if method != "" && req.Method != method {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
+
+		r.mu.RLock()
+		identify := r.identify
+		authorizer := r.authorizer
+		mws := make([]router.Middleware, len(r.middlewares))
+		copy(mws, r.middlewares)
+		gmws := make([]router.Middleware, len(r.globalMiddlewares))
+		copy(gmws, r.globalMiddlewares)
+		r.mu.RUnlock()
+
+		wrapped := h
+
+		// 1. Apply RBAC (it must be innermost so it has access to route.info)
+		// We pass route.info via a special middleware-like wrapper
+		if route.info.Resource != "" {
+			next := wrapped
+			wrapped = func(ctx router.Context) {
+				if authorizer == nil {
+					http.Error(w, "Authorizer not configured", http.StatusInternalServerError)
+					return
+				}
+				userID := ""
+				if identify != nil {
+					userID = identify(ctx)
+				}
+				if !authorizer(userID, route.info.Resource, route.info.Action) {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+				next(ctx)
+			}
+		}
+
+		// 2. Apply local middlewares
+		for i := 0; i < len(mws); i++ {
+			wrapped = mws[i](wrapped)
+		}
+		// 3. Apply global middlewares
+		for i := 0; i < len(gmws); i++ {
+			wrapped = gmws[i](wrapped)
+		}
+
 		ctx := &httpContext{w: w, r: req}
 		wrapped(ctx)
 	})
@@ -198,20 +256,56 @@ func (r *httpRouter) Options(path string, h router.HandlerFunc) router.Route {
 }
 
 func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
-	wrapped := func(ctx router.Context) {
-		if s, ok := ctx.(*httpContext); ok {
-			h(&httpStreamer{httpContext: s})
-		}
-	}
-	// Apply middlewares in order: last added executes first
-	for i := 0; i < len(r.middlewares); i++ {
-		wrapped = r.middlewares[i](wrapped)
-	}
-
 	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}}
+	r.mu.Lock()
 	r.routes = append(r.routes, route)
+	r.mu.Unlock()
 
 	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
+		r.mu.RLock()
+		identify := r.identify
+		authorizer := r.authorizer
+		mws := make([]router.Middleware, len(r.middlewares))
+		copy(mws, r.middlewares)
+		gmws := make([]router.Middleware, len(r.globalMiddlewares))
+		copy(gmws, r.globalMiddlewares)
+		r.mu.RUnlock()
+
+		wrapped := func(ctx router.Context) {
+			if s, ok := ctx.(*httpContext); ok {
+				h(&httpStreamer{httpContext: s})
+			}
+		}
+
+		// 1. Apply RBAC
+		if route.info.Resource != "" {
+			next := wrapped
+			wrapped = func(ctx router.Context) {
+				if authorizer == nil {
+					http.Error(w, "Authorizer not configured", http.StatusInternalServerError)
+					return
+				}
+				userID := ""
+				if identify != nil {
+					userID = identify(ctx)
+				}
+				if !authorizer(userID, route.info.Resource, route.info.Action) {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+				next(ctx)
+			}
+		}
+
+		// 2. Apply local middlewares
+		for i := 0; i < len(mws); i++ {
+			wrapped = mws[i](wrapped)
+		}
+		// 3. Apply global middlewares
+		for i := 0; i < len(gmws); i++ {
+			wrapped = gmws[i](wrapped)
+		}
+
 		ctx := &httpContext{w: w, r: req}
 		wrapped(ctx)
 	})
@@ -219,11 +313,10 @@ func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
 }
 
 func (r *httpRouter) Socket(path string, h router.SocketFunc) router.Route {
-	// WebSockets require a specific library to upgrade the connection.
-	// For now, we provide a stub or use a basic hijacking if available.
-	// The tinywasm/router contract doesn't specify the upgrade mechanism.
 	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}}
+	r.mu.Lock()
 	r.routes = append(r.routes, route)
+	r.mu.Unlock()
 
 	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "WebSocket not implemented in native adapter", http.StatusNotImplemented)
@@ -232,6 +325,8 @@ func (r *httpRouter) Socket(path string, h router.SocketFunc) router.Route {
 }
 
 func (r *httpRouter) Routes() []router.RouteInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	result := make([]router.RouteInfo, len(r.routes))
 	for i, route := range r.routes {
 		result[i] = route.info
