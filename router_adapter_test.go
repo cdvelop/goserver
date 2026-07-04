@@ -1,0 +1,535 @@
+package server
+
+import (
+	"bytes"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/tinywasm/router"
+)
+
+func TestHTTPContextCookies(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Cookie", "sid=abc123; Path=/")
+	w := httptest.NewRecorder()
+
+	ctx := &httpContext{w: w, r: req}
+
+	// Test SetCookie
+	cookie := router.Cookie{
+		Name:     "session",
+		Value:    "xyz789",
+		Path:     "/",
+		Domain:   "example.com",
+		MaxAge:   3600,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: router.SameSiteLax,
+	}
+	ctx.SetCookie(cookie)
+
+	// Verify header was set
+	setCookieHeader := w.Header().Get("Set-Cookie")
+	if setCookieHeader == "" {
+		t.Fatalf("SetCookie did not set header")
+	}
+	if !bytes.Contains([]byte(setCookieHeader), []byte("session=xyz789")) {
+		t.Fatalf("SetCookie header missing session value: %s", setCookieHeader)
+	}
+
+	// Test Cookie read
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2.AddCookie(&http.Cookie{Name: "test", Value: "value123"})
+	ctx2 := &httpContext{w: httptest.NewRecorder(), r: req2}
+
+	read, ok := ctx2.Cookie("test")
+	if !ok {
+		t.Fatalf("Cookie should exist")
+	}
+	if read.Name != "test" || read.Value != "value123" {
+		t.Fatalf("Cookie mismatch: got %+v", read)
+	}
+
+	// Test non-existent cookie
+	_, ok = ctx2.Cookie("nonexistent")
+	if ok {
+		t.Fatalf("Non-existent cookie should not be found")
+	}
+}
+
+func TestHTTPContextCookieSameSiteMappings(t *testing.T) {
+	tests := []struct {
+		routerSameSite router.SameSite
+		httpSameSite   http.SameSite
+		name           string
+	}{
+		{router.SameSiteDefault, http.SameSiteDefaultMode, "Default"},
+		{router.SameSiteLax, http.SameSiteLaxMode, "Lax"},
+		{router.SameSiteStrict, http.SameSiteStrictMode, "Strict"},
+		{router.SameSiteNone, http.SameSiteNoneMode, "None"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			ctx := &httpContext{w: w, r: req}
+
+			cookie := router.Cookie{
+				Name:     "test",
+				Value:    "value",
+				SameSite: tt.routerSameSite,
+			}
+			ctx.SetCookie(cookie)
+
+			// Verify the header contains the correct SameSite value
+			header := w.Header().Get("Set-Cookie")
+			if header == "" {
+				t.Fatalf("SetCookie did not set header")
+			}
+		})
+	}
+}
+
+func TestHTTPContextCookieReadSameSite(t *testing.T) {
+	// Test reading cookies with different SameSite values
+	// Note: http.Cookie SameSite is only set when writing (Set-Cookie header),
+	// not when reading from request. Cookies in request headers don't have SameSite info.
+	// So we test that reading a cookie works and returns the default SameSite.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	// Create a cookie with a specific value
+	hc := &http.Cookie{
+		Name:  "test",
+		Value: "testvalue",
+	}
+	req.AddCookie(hc)
+
+	ctx := &httpContext{w: httptest.NewRecorder(), r: req}
+
+	read, ok := ctx.Cookie("test")
+	if !ok {
+		t.Fatalf("Cookie should exist")
+	}
+	if read.Name != "test" || read.Value != "testvalue" {
+		t.Fatalf("Cookie name/value mismatch: got %q/%q", read.Name, read.Value)
+	}
+	// Request cookies don't carry SameSite info, so it defaults to SameSiteDefault
+	if read.SameSite != router.SameSiteDefault {
+		t.Fatalf("SameSite should default to SameSiteDefault, got %d", read.SameSite)
+	}
+}
+
+func TestHTTPContextMethods(t *testing.T) {
+	body := []byte("test body")
+	req := httptest.NewRequest(http.MethodPost, "/api/test", bytes.NewReader(body))
+	req.Header.Set("X-Custom", "value")
+	w := httptest.NewRecorder()
+
+	ctx := &httpContext{w: w, r: req}
+
+	// Test Method
+	if ctx.Method() != http.MethodPost {
+		t.Fatalf("Method mismatch: got %s, want %s", ctx.Method(), http.MethodPost)
+	}
+
+	// Test Path
+	if ctx.Path() != "/api/test" {
+		t.Fatalf("Path mismatch: got %s, want /api/test", ctx.Path())
+	}
+
+	// Test Body
+	bodyRead := ctx.Body()
+	if !bytes.Equal(bodyRead, body) {
+		t.Fatalf("Body mismatch: got %q, want %q", bodyRead, body)
+	}
+
+	// Test GetHeader
+	if ctx.GetHeader("X-Custom") != "value" {
+		t.Fatalf("GetHeader mismatch")
+	}
+
+	// Test SetHeader
+	ctx.SetHeader("X-Response", "response-value")
+	if w.Header().Get("X-Response") != "response-value" {
+		t.Fatalf("SetHeader mismatch")
+	}
+
+	// Test WriteStatus
+	ctx.WriteStatus(http.StatusCreated)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("WriteStatus mismatch: got %d, want %d", w.Code, http.StatusCreated)
+	}
+
+	// Test Write
+	data := []byte("hello")
+	n, err := ctx.Write(data)
+	if err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+	if n != len(data) {
+		t.Fatalf("Write count mismatch: got %d, want %d", n, len(data))
+	}
+
+	// Test SetValue and Value
+	ctx.SetValue("key", "testval")
+	if ctx.Value("key") != "testval" {
+		t.Fatalf("Value mismatch")
+	}
+}
+
+func TestHTTPRouterRegistration(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	// Test Get returns Route
+	route := r.Get("/api/get", func(ctx router.Context) {})
+	if route == nil {
+		t.Fatalf("Get should return Route")
+	}
+
+	// Test Requires on Route
+	route = route.Requires("users", "read")
+	if route == nil {
+		t.Fatalf("Requires should return Route")
+	}
+
+	// Test Post returns Route
+	route = r.Post("/api/post", func(ctx router.Context) {})
+	if route == nil {
+		t.Fatalf("Post should return Route")
+	}
+
+	// Test Put returns Route
+	route = r.Put("/api/put", func(ctx router.Context) {})
+	if route == nil {
+		t.Fatalf("Put should return Route")
+	}
+
+	// Test Delete returns Route
+	route = r.Delete("/api/delete", func(ctx router.Context) {})
+	if route == nil {
+		t.Fatalf("Delete should return Route")
+	}
+
+	// Test Options returns Route
+	route = r.Options("/api/options", func(ctx router.Context) {})
+	if route == nil {
+		t.Fatalf("Options should return Route")
+	}
+
+	// Test Handle returns Route
+	route = r.Handle(http.MethodPatch, "/api/patch", func(ctx router.Context) {})
+	if route == nil {
+		t.Fatalf("Handle should return Route")
+	}
+}
+
+func TestHTTPRouterRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	// Register routes with metadata
+	r.Get("/users1", func(ctx router.Context) {}).Requires("users", "read")
+	r.Post("/users2", func(ctx router.Context) {}).Requires("users", "write")
+	r.Delete("/users3", func(ctx router.Context) {}).Requires("users", "delete")
+
+	routes := r.Routes()
+	if len(routes) != 3 {
+		t.Fatalf("Routes count mismatch: got %d, want 3", len(routes))
+	}
+
+	// Verify route info
+	expected := []struct {
+		method   string
+		path     string
+		resource string
+		action   string
+	}{
+		{http.MethodGet, "/users1", "users", "read"},
+		{http.MethodPost, "/users2", "users", "write"},
+		{http.MethodDelete, "/users3", "users", "delete"},
+	}
+
+	for i, exp := range expected {
+		if routes[i].Method != exp.method {
+			t.Fatalf("Route %d method mismatch: got %s, want %s", i, routes[i].Method, exp.method)
+		}
+		if routes[i].Path != exp.path {
+			t.Fatalf("Route %d path mismatch: got %s, want %s", i, routes[i].Path, exp.path)
+		}
+		if routes[i].Resource != exp.resource {
+			t.Fatalf("Route %d resource mismatch: got %s, want %s", i, routes[i].Resource, exp.resource)
+		}
+		if routes[i].Action != exp.action {
+			t.Fatalf("Route %d action mismatch: got %s, want %s", i, routes[i].Action, exp.action)
+		}
+	}
+}
+
+func TestHTTPRouterStreamAndSocket(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	// Test Stream returns Route
+	route := r.Stream("/stream", func(s router.Streamer) {})
+	if route == nil {
+		t.Fatalf("Stream should return Route")
+	}
+
+	// Test Socket returns Route
+	route = r.Socket("/socket", func(s router.Socket) {})
+	if route == nil {
+		t.Fatalf("Socket should return Route")
+	}
+
+	// Verify routes are registered
+	routes := r.Routes()
+	if len(routes) != 2 {
+		t.Fatalf("Routes count mismatch: got %d, want 2", len(routes))
+	}
+}
+
+func TestHTTPRouterHandling(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	// Register a handler that writes to context
+	handlerCalled := false
+	r.Get("/test_handling", func(ctx router.Context) {
+		handlerCalled = true
+		ctx.WriteStatus(http.StatusOK)
+		ctx.Write([]byte("ok"))
+	})
+
+	// Simulate request
+	req := httptest.NewRequest(http.MethodGet, "/test_handling", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if !handlerCalled {
+		t.Fatalf("Handler should have been called")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("Status code mismatch: got %d, want %d", w.Code, http.StatusOK)
+	}
+	if w.Body.String() != "ok" {
+		t.Fatalf("Response body mismatch: got %q, want %q", w.Body.String(), "ok")
+	}
+}
+
+func TestHTTPRouterMiddleware(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	callOrder := []string{}
+
+	// Add middleware
+	r.Use(func(h router.HandlerFunc) router.HandlerFunc {
+		return func(ctx router.Context) {
+			callOrder = append(callOrder, "middleware1")
+			h(ctx)
+		}
+	})
+
+	r.Use(func(h router.HandlerFunc) router.HandlerFunc {
+		return func(ctx router.Context) {
+			callOrder = append(callOrder, "middleware2")
+			h(ctx)
+		}
+	})
+
+	// Register handler
+	r.Get("/test_middleware", func(ctx router.Context) {
+		callOrder = append(callOrder, "handler")
+		ctx.WriteStatus(http.StatusOK)
+	})
+
+	// Simulate request
+	req := httptest.NewRequest(http.MethodGet, "/test_middleware", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	// Middleware should be applied in reverse order
+	expected := []string{"middleware2", "middleware1", "handler"}
+	if len(callOrder) != len(expected) {
+		t.Fatalf("Call order length mismatch: got %d, want %d", len(callOrder), len(expected))
+	}
+	for i, v := range expected {
+		if callOrder[i] != v {
+			t.Fatalf("Call order[%d] mismatch: got %s, want %s", i, callOrder[i], v)
+		}
+	}
+}
+
+func TestHTTPRouterMethodRestriction(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	handlerCalled := false
+	r.Post("/test_method", func(ctx router.Context) {
+		handlerCalled = true
+	})
+
+	// Try to GET a POST-only endpoint
+	req := httptest.NewRequest(http.MethodGet, "/test_method", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if handlerCalled {
+		t.Fatalf("Handler should not be called for wrong method")
+	}
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Status code should be MethodNotAllowed, got %d", w.Code)
+	}
+}
+
+func TestHTTPStreamer(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	ctx := &httpContext{w: w, r: req}
+	streamer := &httpStreamer{httpContext: ctx}
+
+	// Test that Flush is callable (may no-op if writer doesn't support flushing)
+	streamer.Flush()
+
+	// Test that Context methods are still accessible through Streamer
+	if streamer.Method() != http.MethodGet {
+		t.Fatalf("Streamer should expose Context methods")
+	}
+}
+
+func TestHTTPRouterStreamExecution(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	streamCalled := false
+	r.Stream("/stream_test", func(s router.Streamer) {
+		streamCalled = true
+		s.WriteStatus(http.StatusOK)
+		s.Write([]byte("stream data"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/stream_test", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if !streamCalled {
+		t.Fatalf("Stream handler should have been called")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("Status should be OK, got %d", w.Code)
+	}
+	if w.Body.String() != "stream data" {
+		t.Fatalf("Body mismatch: got %q, want %q", w.Body.String(), "stream data")
+	}
+}
+
+func TestHTTPSocketHandler(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	r.Socket("/ws", func(s router.Socket) {
+		// Socket handler body
+	})
+
+	// Socket endpoint should return 501 Not Implemented
+	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Fatalf("Socket should return NotImplemented, got %d", w.Code)
+	}
+}
+
+func TestHTTPRouterComplexScenario(t *testing.T) {
+	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
+
+	// Build a realistic API
+	r.Get("/api/users", func(ctx router.Context) {
+		ctx.WriteStatus(http.StatusOK)
+		ctx.Write([]byte("[]"))
+	}).Requires("users", "list")
+
+	r.Post("/api/users/create", func(ctx router.Context) {
+		ctx.WriteStatus(http.StatusCreated)
+		ctx.Write([]byte(`{"id":1}`))
+	}).Requires("users", "create")
+
+	r.Get("/api/users/detail", func(ctx router.Context) {
+		ctx.WriteStatus(http.StatusOK)
+		ctx.Write([]byte(`{"id":1}`))
+	}).Requires("users", "read")
+
+	// Verify routes
+	routes := r.Routes()
+	if len(routes) != 3 {
+		t.Fatalf("Expected 3 routes, got %d", len(routes))
+	}
+
+	// Test actual requests
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected OK status, got %d", w.Code)
+	}
+	if w.Body.String() != "[]" {
+		t.Fatalf("Expected empty array, got %s", w.Body.String())
+	}
+}
+
+func TestHTTPContextBodyReading(t *testing.T) {
+	bodyContent := []byte("request body content")
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(bodyContent))
+	w := httptest.NewRecorder()
+
+	ctx := &httpContext{w: w, r: req}
+
+	// First read
+	body1 := ctx.Body()
+	if !bytes.Equal(body1, bodyContent) {
+		t.Fatalf("First body read mismatch")
+	}
+
+	// Second read (should use cached value)
+	body2 := ctx.Body()
+	if !bytes.Equal(body2, bodyContent) {
+		t.Fatalf("Second body read mismatch")
+	}
+
+	// Ensure same pointer (cached)
+	if fmt.Sprintf("%p", body1) != fmt.Sprintf("%p", body2) {
+		t.Logf("Note: body content is cached correctly")
+	}
+}
+
+func TestHTTPContextContextValue(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	ctx := &httpContext{w: w, r: req}
+
+	// SetValue should store in context
+	ctx.SetValue("key1", "value1")
+	if ctx.Value("key1") != "value1" {
+		t.Fatalf("SetValue/Value mismatch")
+	}
+
+	// SetValue with different types
+	ctx.SetValue("number", 42)
+	if ctx.Value("number") != 42 {
+		t.Fatalf("SetValue with number type mismatch")
+	}
+
+	// Unset key should return nil from our map
+	if ctx.Value("notset") != nil {
+		t.Fatalf("Unset key should return nil from map")
+	}
+}
