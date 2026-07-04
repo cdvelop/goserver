@@ -23,7 +23,7 @@ type serverTemplateData struct {
 // Used for comparison to detect if user modified the server file
 func (h *ServerHandler) getExpectedServerContent() (string, error) {
 	data := serverTemplateData{
-		AppPort:   h.AppPort,
+		AppPort:   h.Port(),
 		PublicDir: h.PublicDir,
 	}
 

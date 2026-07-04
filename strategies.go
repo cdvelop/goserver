@@ -78,15 +78,15 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	}
 
 	s.server = &http.Server{
-		Addr:    ":" + s.handler.AppPort,
+		Addr:    ":" + s.handler.Port(),
 		Handler: mux,
 	}
 	s.mu.Unlock()
 
-	s.handler.log("Starting Internal Server on port:", s.handler.AppPort)
+	s.handler.log("Starting Internal Server on port:", s.handler.Port())
 
 	// Create listener first to know exactly when we're ready
-	ln, err := net.Listen("tcp", ":"+s.handler.AppPort)
+	ln, err := net.Listen("tcp", ":"+s.handler.Port())
 	if err != nil {
 		s.handler.log("Internal Server listen error:", err)
 		s.mu.Lock()
@@ -102,17 +102,17 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	// Signal that server is ready to accept connections and trigger browser open
 	go func() {
 		// Wait max 5 seconds for the internal server to actually respond
-		if WaitForPortListening(s.handler.AppPort, 5*time.Second, false) {
+		if WaitForPortListening(s.handler.Port(), 5*time.Second, false) {
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
-					s.handler.OpenBrowser(s.handler.AppPort, false) // Internal server is always http
+					s.handler.OpenBrowser(s.handler.Port(), false) // Internal server is always http
 				}
 			})
 		} else {
 			s.handler.log("Warning: Internal Server port not responding, trying to open browser anyway...")
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
-					s.handler.OpenBrowser(s.handler.AppPort, false)
+					s.handler.OpenBrowser(s.handler.Port(), false)
 				}
 			})
 		}
@@ -176,14 +176,14 @@ func (s *internalStrategy) Restart() error {
 	}
 
 	// Wait for port to be released (up to 2 seconds)
-	waitForPortFree(s.handler.AppPort)
+	waitForPortFree(s.handler.Port())
 
 	// Note: We run Start in a goroutine because it blocks on ExitChan
 	go s.Start(nil)
 
 	// Wait for server to be ready before returning
 	// This prevents race conditions where browser reload is triggered before server is up
-	if !WaitForPortListening(s.handler.AppPort, 5*time.Second, false) {
+	if !WaitForPortListening(s.handler.Port(), 5*time.Second, false) {
 		return errors.New("timeout waiting for internal server restart")
 	}
 	return nil
@@ -356,12 +356,12 @@ func (s *externalStrategy) startServer() error {
 	// Signal when server is ready in a separate goroutine (non-blocking)
 	// Checks every 50ms until port is listening or 30s timeout
 	go func() {
-		if WaitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
-			//s.handler.log("Server is now accepting connections on port:", s.handler.AppPort)
+		if WaitForPortListening(s.handler.Port(), 30*time.Second, s.handler.Https) {
+			//s.handler.log("Server is now accepting connections on port:", s.handler.Port())
 			// Trigger browser open only once
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
-					s.handler.OpenBrowser(s.handler.AppPort, s.handler.Https)
+					s.handler.OpenBrowser(s.handler.Port(), s.handler.Https)
 				}
 			})
 		} else {
@@ -369,13 +369,13 @@ func (s *externalStrategy) startServer() error {
 			// Try to open anyway on first attempt
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
-					s.handler.OpenBrowser(s.handler.AppPort, s.handler.Https)
+					s.handler.OpenBrowser(s.handler.Port(), s.handler.Https)
 				}
 			})
 		}
 	}()
 
-	//s.handler.log("Started:", path.Join(s.handler.SourceDir, s.handler.mainFileExternalServer), "Port:", s.handler.AppPort)
+	//s.handler.log("Started:", path.Join(s.handler.SourceDir, s.handler.mainFileExternalServer), "Port:", s.handler.Port())
 	return nil
 }
 
@@ -393,33 +393,32 @@ func (s *externalStrategy) Restart() error {
 	if err != nil {
 		return err
 	}
-	waitForPortFree(s.handler.AppPort) // Ensure port is free
+	waitForPortFree(s.handler.Port()) // Ensure port is free
 
 	// Compile synchronously to catch compilation errors
 	if err := s.goCompiler.CompileProgram(); err != nil {
 		return err
 	}
 
+	// Run synchronously so callers (and tests) observe the run before Restart returns.
+	if err := s.goRun.RunProgram(); err != nil {
+		s.handler.log("RunProgram failed:", err)
+		return err
+	}
+	s.handler.log("External server restarted successfully")
+
+	// Ensure browser opens if this is the first successful start
 	go func() {
-		if err := s.goRun.RunProgram(); err != nil {
-			s.handler.log("RunProgram failed:", err)
-			return
+		if WaitForPortListening(s.handler.Port(), 30*time.Second, s.handler.Https) {
+			s.handler.openBrowserOnce.Do(func() {
+				if s.handler.OpenBrowser != nil {
+					s.handler.OpenBrowser(s.handler.Port(), s.handler.Https)
+				}
+			})
 		}
-		s.handler.log("External server restarted successfully")
+	}()
 
-		// Ensure browser opens if this is the first successful start
-		// We still keep the async waiter for the browser open logic just in case,
-		// but Restart() itself will now block below.
-		go func() {
-			if WaitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
-				s.handler.openBrowserOnce.Do(func() {
-					if s.handler.OpenBrowser != nil {
-						s.handler.OpenBrowser(s.handler.AppPort, s.handler.Https)
-					}
-				})
-			}
-		}()
-
+	go func() {
 		// Block until exit signal received
 		if s.handler.ExitChan != nil {
 			<-s.handler.ExitChan
@@ -429,7 +428,7 @@ func (s *externalStrategy) Restart() error {
 
 	// Wait for server to be ready before returning
 	// This prevents race conditions where browser reload triggers before server is up
-	if !WaitForPortListening(s.handler.AppPort, 30*time.Second, s.handler.Https) {
+	if !WaitForPortListening(s.handler.Port(), 30*time.Second, s.handler.Https) {
 		return errors.New("timeout waiting for external server restart")
 	}
 

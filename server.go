@@ -62,6 +62,7 @@ type ServerHandler struct {
 	mainFileExternalServer string // eg: main.server.go
 	strategy               ServerStrategy
 	strategyMu             sync.RWMutex // protects strategy field
+	portMu                 sync.RWMutex // protects AppPort (read from goroutines started by strategies)
 	executionInternal      bool         // true = embedded server (internal), false = external process
 	onLog                  func(message ...any)
 	openBrowserOnce        sync.Once
@@ -153,7 +154,16 @@ func (h *ServerHandler) SetMainInputFile(name string) {
 
 // SetPort sets the server port
 func (h *ServerHandler) SetPort(port string) {
+	h.portMu.Lock()
 	h.Config.AppPort = port
+	h.portMu.Unlock()
+}
+
+// Port returns the current server port. Safe for concurrent use with SetPort.
+func (h *ServerHandler) Port() string {
+	h.portMu.RLock()
+	defer h.portMu.RUnlock()
+	return h.Config.AppPort
 }
 
 // SetHTTPS enables or disables HTTPS
@@ -292,7 +302,7 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 				h.log("Warning stopping internal server:", err)
 			}
 
-			waitForPortFree(h.AppPort)
+			waitForPortFree(h.Port())
 
 			h.executionInternal = false
 			h.strategy = newExternalStrategy(h)

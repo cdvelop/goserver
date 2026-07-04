@@ -49,7 +49,7 @@ func (h *ServerHandler) StopServer() error {
 	}
 
 	// Wait for port to be released (up to 5 seconds)
-	addr := ":" + h.AppPort
+	addr := ":" + h.Port()
 	timeout := time.After(5 * time.Second)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -57,13 +57,13 @@ func (h *ServerHandler) StopServer() error {
 	for {
 		select {
 		case <-timeout:
-			h.log("Warning: Port", h.AppPort, "still seems occupied after timeout")
+			h.log("Warning: Port", h.Port(), "still seems occupied after timeout")
 			return err
 		case <-ticker.C:
 			ln, dialErr := net.Listen("tcp", addr)
 			if dialErr == nil {
 				ln.Close()
-				h.log("Port", h.AppPort, "is now free")
+				h.log("Port", h.Port(), "is now free")
 				return err
 			}
 		}
