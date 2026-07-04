@@ -18,6 +18,10 @@ import (
 	"github.com/tinywasm/router"
 )
 
+var ErrUnsupportedEvent = errors.New("server: unsupported file event, no rebuild triggered")
+
+var contentChangeEvents = []string{"write", "create", "rename"}
+
 type ServerStrategy interface {
 	Start(wg *sync.WaitGroup) error
 	Stop() error
@@ -246,8 +250,8 @@ func (s *internalStrategy) HandleFileEvent(fileName, extension, filePath, event 
 
 type externalStrategy struct {
 	handler    *ServerHandler
-	goCompiler *gobuild.GoBuild
-	goRun      *gorun.GoRun
+	goCompiler gobuild.Compiler
+	goRun      gorun.Runner
 }
 
 func newExternalStrategy(h *ServerHandler) *externalStrategy {
@@ -378,7 +382,7 @@ func (s *externalStrategy) startServer() error {
 func (s *externalStrategy) Stop() error {
 	if s.goRun != nil {
 		s.handler.log("Stopping external server...")
-		return s.goRun.StopProgramAndCleanup(true)
+		return s.goRun.StopProgram()
 	}
 	return nil
 }
@@ -433,7 +437,15 @@ func (s *externalStrategy) Restart() error {
 }
 
 func (s *externalStrategy) HandleFileEvent(fileName, extension, filePath, event string) error {
-	if event == "write" {
+	isContentChange := false
+	for _, e := range contentChangeEvents {
+		if e == event {
+			isContentChange = true
+			break
+		}
+	}
+
+	if isContentChange {
 		s.handler.log("Go file modified, restarting external server ...")
 		err := s.Restart()
 		if err != nil {
@@ -443,5 +455,5 @@ func (s *externalStrategy) HandleFileEvent(fileName, extension, filePath, event 
 		}
 		return err
 	}
-	return nil
+	return ErrUnsupportedEvent
 }
