@@ -2,9 +2,10 @@ package server
 
 import (
 	"errors"
-	"net/http"
 	"path/filepath"
 	"sync"
+
+	"github.com/tinywasm/router"
 )
 
 // NOTE: circular dep prevents importing app — mirror the interface locally.
@@ -23,7 +24,7 @@ type serverInterface interface {
 	Change(v string)
 	RefreshUI()
 	MainInputFileRelativePath() string
-	RegisterRoutes(fn func(*http.ServeMux))
+	RegisterRoutes(fn func(router.Router))
 }
 
 // Store defines the minimal interface for persistent storage
@@ -61,12 +62,13 @@ type ServerHandler struct {
 	mainFileExternalServer string // eg: main.server.go
 	strategy               ServerStrategy
 	strategyMu             sync.RWMutex // protects strategy field
+	portMu                 sync.RWMutex // protects AppPort (read from goroutines started by strategies)
 	executionInternal      bool         // true = embedded server (internal), false = external process
 	onLog                  func(message ...any)
 	openBrowserOnce        sync.Once
 
 	// Internal route list
-	routes []func(*http.ServeMux)
+	routes []func(router.Router)
 }
 
 type Config struct {
@@ -110,7 +112,7 @@ func New() *ServerHandler {
 		Config:                 c,
 		mainFileExternalServer: c.MainInputFile,
 		onLog:                  c.Logger,
-		routes:                 make([]func(*http.ServeMux), 0),
+		routes:                 make([]func(router.Router), 0),
 	}
 
 	sh.Store = noopStore{}
@@ -152,7 +154,16 @@ func (h *ServerHandler) SetMainInputFile(name string) {
 
 // SetPort sets the server port
 func (h *ServerHandler) SetPort(port string) {
+	h.portMu.Lock()
 	h.Config.AppPort = port
+	h.portMu.Unlock()
+}
+
+// Port returns the current server port. Safe for concurrent use with SetPort.
+func (h *ServerHandler) Port() string {
+	h.portMu.RLock()
+	defer h.portMu.RUnlock()
+	return h.Config.AppPort
 }
 
 // SetHTTPS enables or disables HTTPS
@@ -236,7 +247,7 @@ func (h *ServerHandler) SetDisableGlobalCleanup(disable bool) {
 
 // RegisterRoutes appends fn to the internal route list.
 // Call before StartServer.
-func (h *ServerHandler) RegisterRoutes(fn func(*http.ServeMux)) {
+func (h *ServerHandler) RegisterRoutes(fn func(router.Router)) {
 	h.routes = append(h.routes, fn)
 }
 
@@ -291,7 +302,7 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 				h.log("Warning stopping internal server:", err)
 			}
 
-			waitForPortFree(h.AppPort)
+			waitForPortFree(h.Port())
 
 			h.executionInternal = false
 			h.strategy = newExternalStrategy(h)
