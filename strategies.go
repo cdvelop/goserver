@@ -15,6 +15,7 @@ import (
 
 	"github.com/tinywasm/gobuild"
 	"github.com/tinywasm/gorun"
+	"github.com/tinywasm/router"
 )
 
 type ServerStrategy interface {
@@ -58,16 +59,17 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	// WaitGroup Done is handled at the end of this function (blocking until exit)
 
 	mux := http.NewServeMux()
+	r := newHTTPRouter(mux)
 
 	if len(s.handler.routes) > 0 {
 		for _, registerConfig := range s.handler.routes {
-			registerConfig(mux)
+			registerConfig(r)
 		}
 	} else {
 		// Default handler if no routes provided
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			fmt.Fprint(w, "<h3>No routes registered in In-Memory Server</h3>")
+		r.Get("/", func(ctx router.Context) {
+			ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+			fmt.Fprint(ctx, "<h3>No routes registered in In-Memory Server</h3>")
 		})
 	}
 

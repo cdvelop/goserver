@@ -2,9 +2,10 @@ package server
 
 import (
 	"errors"
-	"net/http"
 	"path/filepath"
 	"sync"
+
+	"github.com/tinywasm/router"
 )
 
 // NOTE: circular dep prevents importing app — mirror the interface locally.
@@ -23,7 +24,7 @@ type serverInterface interface {
 	Change(v string)
 	RefreshUI()
 	MainInputFileRelativePath() string
-	RegisterRoutes(fn func(*http.ServeMux))
+	RegisterRoutes(fn func(router.Router))
 }
 
 // Store defines the minimal interface for persistent storage
@@ -66,7 +67,7 @@ type ServerHandler struct {
 	openBrowserOnce        sync.Once
 
 	// Internal route list
-	routes []func(*http.ServeMux)
+	routes []func(router.Router)
 }
 
 type Config struct {
@@ -110,7 +111,7 @@ func New() *ServerHandler {
 		Config:                 c,
 		mainFileExternalServer: c.MainInputFile,
 		onLog:                  c.Logger,
-		routes:                 make([]func(*http.ServeMux), 0),
+		routes:                 make([]func(router.Router), 0),
 	}
 
 	sh.Store = noopStore{}
@@ -236,7 +237,7 @@ func (h *ServerHandler) SetDisableGlobalCleanup(disable bool) {
 
 // RegisterRoutes appends fn to the internal route list.
 // Call before StartServer.
-func (h *ServerHandler) RegisterRoutes(fn func(*http.ServeMux)) {
+func (h *ServerHandler) RegisterRoutes(fn func(router.Router)) {
 	h.routes = append(h.routes, fn)
 }
 
