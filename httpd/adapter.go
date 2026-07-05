@@ -152,6 +152,8 @@ type httpRouter struct {
 
 type httpRoute struct {
 	info router.RouteInfo
+	h    router.HandlerFunc
+	sh   router.StreamFunc
 }
 
 func (r *httpRoute) Requires(resource string, action string) router.Route {
@@ -191,22 +193,34 @@ func (r *httpRouter) setAuthorizer(authn router.Middleware, authorizer func(stri
 }
 
 func (r *httpRouter) Handle(method, path string, h router.HandlerFunc) router.Route {
-	route := &httpRoute{info: router.RouteInfo{Method: method, Path: path}}
+	route := &httpRoute{info: router.RouteInfo{Method: method, Path: path}, h: h}
 	r.mu.Lock()
 	r.routes = append(r.routes, route)
 	r.mu.Unlock()
 
-	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
-		if method != "" && req.Method != method {
+	r.register(route)
+	return route
+}
+
+func (r *httpRouter) register(route *httpRoute) {
+	r.mux.HandleFunc(route.info.Path, func(w http.ResponseWriter, req *http.Request) {
+		if route.info.Method != "" && req.Method != route.info.Method {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		wrapped := r.applySecurityAndMiddleware(h, route)
+		wrapped := r.applySecurityAndMiddleware(route.h, route)
 		ctx := &httpContext{w: w, r: req}
 		wrapped(ctx)
 	})
-	return route
+}
+
+func (r *httpRouter) reRegister(route *httpRoute) {
+	if route.h != nil {
+		r.register(route)
+	} else if route.sh != nil {
+		r.registerStream(route)
+	}
 }
 
 func (r *httpRouter) Get(path string, h router.HandlerFunc) router.Route {
@@ -230,15 +244,20 @@ func (r *httpRouter) Options(path string, h router.HandlerFunc) router.Route {
 }
 
 func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
-	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}}
+	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}, sh: h}
 	r.mu.Lock()
 	r.routes = append(r.routes, route)
 	r.mu.Unlock()
 
-	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
+	r.registerStream(route)
+	return route
+}
+
+func (r *httpRouter) registerStream(route *httpRoute) {
+	r.mux.HandleFunc(route.info.Path, func(w http.ResponseWriter, req *http.Request) {
 		hfunc := func(ctx router.Context) {
 			if s, ok := ctx.(*httpContext); ok {
-				h(&httpStreamer{httpContext: s})
+				route.sh(&httpStreamer{httpContext: s})
 			}
 		}
 
@@ -246,7 +265,6 @@ func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
 		ctx := &httpContext{w: w, r: req}
 		wrapped(ctx)
 	})
-	return route
 }
 
 func (r *httpRouter) applySecurityAndMiddleware(h router.HandlerFunc, route *httpRoute) router.HandlerFunc {

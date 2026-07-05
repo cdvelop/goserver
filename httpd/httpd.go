@@ -68,6 +68,9 @@ func (s *Server) Mount(m ...router.APIModule) *Server {
 }
 
 func (s *Server) Handler() (http.Handler, error) {
+	s.mux = http.NewServeMux()
+	s.router.mux = s.mux
+
 	if s.config.Health {
 		s.mux.HandleFunc(HealthPath, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -76,6 +79,16 @@ func (s *Server) Handler() (http.Handler, error) {
 	}
 
 	s.registerRoutesEndpoint()
+
+	// Re-register all existing routes in the new mux
+	s.router.mu.RLock()
+	routes := make([]*httpRoute, len(s.router.routes))
+	copy(routes, s.router.routes)
+	s.router.mu.RUnlock()
+
+	for _, route := range routes {
+		s.router.reRegister(route)
+	}
 
 	if err := s.validateRBAC(); err != nil {
 		return nil, err
