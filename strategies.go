@@ -227,6 +227,12 @@ func WaitForPortListening(port string, timeout time.Duration, https bool) bool {
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		// The polled server is killed/restarted between attempts, so a persistent
+		// connection can go idle right as the process dies; the OS then delivers a
+		// stray response on that idle connection, which net/http logs as
+		// "Unsolicited response received on idle HTTP channel". Disable keep-alives
+		// so each poll uses a fresh connection.
+		DisableKeepAlives: true,
 	}
 	timeoutCtx := 500 * time.Millisecond
 	if TestMode {

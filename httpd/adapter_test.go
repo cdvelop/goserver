@@ -293,8 +293,8 @@ func TestHTTPRouterStreamAndSocket(t *testing.T) {
 }
 
 func TestHTTPRouterHandling(t *testing.T) {
-	mux := http.NewServeMux()
-	r := NewRouter(mux)
+	srv := New(Config{})
+	r := srv.Router()
 
 	// Register a handler that writes to context
 	handlerCalled := false
@@ -302,12 +302,17 @@ func TestHTTPRouterHandling(t *testing.T) {
 		handlerCalled = true
 		ctx.WriteStatus(http.StatusOK)
 		ctx.Write([]byte("ok"))
-	})
+	}).Public()
+
+	handler, err := srv.Handler()
+	if err != nil {
+		t.Fatalf("Handler failed: %v", err)
+	}
 
 	// Simulate request
 	req := httptest.NewRequest(http.MethodGet, "/test_handling", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	handler.ServeHTTP(w, req)
 
 	if !handlerCalled {
 		t.Fatalf("Handler should have been called")
@@ -321,8 +326,8 @@ func TestHTTPRouterHandling(t *testing.T) {
 }
 
 func TestHTTPRouterMiddleware(t *testing.T) {
-	mux := http.NewServeMux()
-	r := NewRouter(mux)
+	srv := New(Config{})
+	r := srv.Router()
 
 	callOrder := []string{}
 
@@ -345,12 +350,17 @@ func TestHTTPRouterMiddleware(t *testing.T) {
 	r.Get("/test_middleware", func(ctx router.Context) {
 		callOrder = append(callOrder, "handler")
 		ctx.WriteStatus(http.StatusOK)
-	})
+	}).Public()
+
+	handler, err := srv.Handler()
+	if err != nil {
+		t.Fatalf("Handler failed: %v", err)
+	}
 
 	// Simulate request
 	req := httptest.NewRequest(http.MethodGet, "/test_middleware", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	handler.ServeHTTP(w, req)
 
 	// Middleware should be applied in reverse order
 	expected := []string{"middleware2", "middleware1", "handler"}
@@ -403,19 +413,24 @@ func TestHTTPStreamer(t *testing.T) {
 }
 
 func TestHTTPRouterStreamExecution(t *testing.T) {
-	mux := http.NewServeMux()
-	r := NewRouter(mux)
+	srv := New(Config{})
+	r := srv.Router()
 
 	streamCalled := false
 	r.Stream("/stream_test", func(s router.Streamer) {
 		streamCalled = true
 		s.WriteStatus(http.StatusOK)
 		s.Write([]byte("stream data"))
-	})
+	}).Public()
+
+	handler, err := srv.Handler()
+	if err != nil {
+		t.Fatalf("Handler failed: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/stream_test", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	handler.ServeHTTP(w, req)
 
 	if !streamCalled {
 		t.Fatalf("Stream handler should have been called")
@@ -447,17 +462,16 @@ func TestHTTPSocketHandler(t *testing.T) {
 }
 
 func TestHTTPRouterComplexScenario(t *testing.T) {
-	mux := http.NewServeMux()
-	r := NewRouter(mux).(*httpRouter)
-
-	// Set an empty authorizer to avoid 500 when RBAC is triggered
-	r.setAuthorizer(nil, func(u, r, a string) bool { return true })
+	srv := New(Config{
+		Authorize: func(u, r, a string) bool { return true },
+	})
+	r := srv.Router()
 
 	// Build a realistic API
 	r.Get("/api/users", func(ctx router.Context) {
 		ctx.WriteStatus(http.StatusOK)
 		ctx.Write([]byte("[]"))
-	}).Requires("users", "list")
+	}).Requires("users", "list").Public()
 
 	r.Post("/api/users/create", func(ctx router.Context) {
 		ctx.WriteStatus(http.StatusCreated)
@@ -475,10 +489,15 @@ func TestHTTPRouterComplexScenario(t *testing.T) {
 		t.Fatalf("Expected 3 routes, got %d", len(routes))
 	}
 
+	handler, err := srv.Handler()
+	if err != nil {
+		t.Fatalf("Handler failed: %v", err)
+	}
+
 	// Test actual requests
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Expected OK status, got %d", w.Code)

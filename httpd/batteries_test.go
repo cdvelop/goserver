@@ -2,7 +2,6 @@ package httpd
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -38,24 +37,20 @@ func TestHTTPDBatteries(t *testing.T) {
 		ctx.Write([]byte("secret"))
 	}).Requires("admin", "read")
 
-	s.config.Identify = func(ctx router.Context) string {
-		return ctx.GetHeader("X-User")
+	s.config.Authn = func(next router.HandlerFunc) router.HandlerFunc {
+		return func(ctx router.Context) {
+			ctx.SetUserID(ctx.GetHeader("X-User"))
+			next(ctx)
+		}
 	}
-	s.config.Authorizer = func(userID, resource, action string) bool {
+	s.config.Authorize = func(userID, resource, action string) bool {
 		return userID == "admin"
 	}
 
-	// Prepare handler
-	if s.config.Health {
-		s.mux.HandleFunc(HealthPath, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("ok"))
-		})
+	handler, err := s.Handler()
+	if err != nil {
+		t.Fatalf("Handler failed: %v", err)
 	}
-	s.registerRoutesEndpoint()
-	s.router.setAuthorizer(s.config.Identify, s.config.Authorizer)
-
-	handler := s.wrapWithBatteries(s.mux)
 
 	// 1. Test Health
 	req := httptest.NewRequest("GET", "/health", nil)

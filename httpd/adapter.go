@@ -21,6 +21,7 @@ type httpContext struct {
 	body   []byte
 	once   sync.Once
 	values map[string]any
+	userID string
 }
 
 func (c *httpContext) Method() string {
@@ -68,6 +69,14 @@ func (c *httpContext) Value(key string) any {
 		return v
 	}
 	return c.r.Context().Value(key)
+}
+
+func (c *httpContext) SetUserID(id string) {
+	c.userID = id
+}
+
+func (c *httpContext) UserID() string {
+	return c.userID
 }
 
 func (c *httpContext) SetCookie(cookie router.Cookie) {
@@ -137,17 +146,24 @@ type httpRouter struct {
 	routes            []*httpRoute
 
 	// Authorizer info to be used by enforced RBAC
-	identify   func(ctx router.Context) string
+	authn      router.Middleware
 	authorizer func(userID, resource, action string) bool
 }
 
 type httpRoute struct {
 	info router.RouteInfo
+	h    router.HandlerFunc
+	sh   router.StreamFunc
 }
 
 func (r *httpRoute) Requires(resource string, action string) router.Route {
 	r.info.Resource = resource
 	r.info.Action = action
+	return r
+}
+
+func (r *httpRoute) Public() router.Route {
+	r.info.Public = true
 	return r
 }
 
@@ -169,70 +185,42 @@ func (r *httpRouter) useGlobal(m ...router.Middleware) {
 	r.globalMiddlewares = append(r.globalMiddlewares, m...)
 }
 
-func (r *httpRouter) setAuthorizer(identify func(router.Context) string, authorizer func(string, string, string) bool) {
+func (r *httpRouter) setAuthorizer(authn router.Middleware, authorizer func(string, string, string) bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.identify = identify
+	r.authn = authn
 	r.authorizer = authorizer
 }
 
 func (r *httpRouter) Handle(method, path string, h router.HandlerFunc) router.Route {
-	route := &httpRoute{info: router.RouteInfo{Method: method, Path: path}}
+	route := &httpRoute{info: router.RouteInfo{Method: method, Path: path}, h: h}
 	r.mu.Lock()
 	r.routes = append(r.routes, route)
 	r.mu.Unlock()
 
-	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
-		if method != "" && req.Method != method {
+	r.register(route)
+	return route
+}
+
+func (r *httpRouter) register(route *httpRoute) {
+	r.mux.HandleFunc(route.info.Path, func(w http.ResponseWriter, req *http.Request) {
+		if route.info.Method != "" && req.Method != route.info.Method {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		r.mu.RLock()
-		identify := r.identify
-		authorizer := r.authorizer
-		mws := make([]router.Middleware, len(r.middlewares))
-		copy(mws, r.middlewares)
-		gmws := make([]router.Middleware, len(r.globalMiddlewares))
-		copy(gmws, r.globalMiddlewares)
-		r.mu.RUnlock()
-
-		wrapped := h
-
-		// 1. Apply RBAC (it must be innermost so it has access to route.info)
-		// We pass route.info via a special middleware-like wrapper
-		if route.info.Resource != "" {
-			next := wrapped
-			wrapped = func(ctx router.Context) {
-				if authorizer == nil {
-					http.Error(w, "Authorizer not configured", http.StatusInternalServerError)
-					return
-				}
-				userID := ""
-				if identify != nil {
-					userID = identify(ctx)
-				}
-				if !authorizer(userID, route.info.Resource, route.info.Action) {
-					http.Error(w, "Forbidden", http.StatusForbidden)
-					return
-				}
-				next(ctx)
-			}
-		}
-
-		// 2. Apply local middlewares
-		for i := 0; i < len(mws); i++ {
-			wrapped = mws[i](wrapped)
-		}
-		// 3. Apply global middlewares
-		for i := 0; i < len(gmws); i++ {
-			wrapped = gmws[i](wrapped)
-		}
-
+		wrapped := r.applySecurityAndMiddleware(route.h, route)
 		ctx := &httpContext{w: w, r: req}
 		wrapped(ctx)
 	})
-	return route
+}
+
+func (r *httpRouter) reRegister(route *httpRoute) {
+	if route.h != nil {
+		r.register(route)
+	} else if route.sh != nil {
+		r.registerStream(route)
+	}
 }
 
 func (r *httpRouter) Get(path string, h router.HandlerFunc) router.Route {
@@ -256,60 +244,92 @@ func (r *httpRouter) Options(path string, h router.HandlerFunc) router.Route {
 }
 
 func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
-	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}}
+	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}, sh: h}
 	r.mu.Lock()
 	r.routes = append(r.routes, route)
 	r.mu.Unlock()
 
-	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
-		r.mu.RLock()
-		identify := r.identify
-		authorizer := r.authorizer
-		mws := make([]router.Middleware, len(r.middlewares))
-		copy(mws, r.middlewares)
-		gmws := make([]router.Middleware, len(r.globalMiddlewares))
-		copy(gmws, r.globalMiddlewares)
-		r.mu.RUnlock()
+	r.registerStream(route)
+	return route
+}
 
-		wrapped := func(ctx router.Context) {
+func (r *httpRouter) registerStream(route *httpRoute) {
+	r.mux.HandleFunc(route.info.Path, func(w http.ResponseWriter, req *http.Request) {
+		hfunc := func(ctx router.Context) {
 			if s, ok := ctx.(*httpContext); ok {
-				h(&httpStreamer{httpContext: s})
+				route.sh(&httpStreamer{httpContext: s})
 			}
 		}
 
-		// 1. Apply RBAC
-		if route.info.Resource != "" {
-			next := wrapped
-			wrapped = func(ctx router.Context) {
-				if authorizer == nil {
-					http.Error(w, "Authorizer not configured", http.StatusInternalServerError)
-					return
-				}
-				userID := ""
-				if identify != nil {
-					userID = identify(ctx)
-				}
-				if !authorizer(userID, route.info.Resource, route.info.Action) {
-					http.Error(w, "Forbidden", http.StatusForbidden)
-					return
-				}
-				next(ctx)
-			}
-		}
-
-		// 2. Apply local middlewares
-		for i := 0; i < len(mws); i++ {
-			wrapped = mws[i](wrapped)
-		}
-		// 3. Apply global middlewares
-		for i := 0; i < len(gmws); i++ {
-			wrapped = gmws[i](wrapped)
-		}
-
+		wrapped := r.applySecurityAndMiddleware(hfunc, route)
 		ctx := &httpContext{w: w, r: req}
 		wrapped(ctx)
 	})
-	return route
+}
+
+func (r *httpRouter) applySecurityAndMiddleware(h router.HandlerFunc, route *httpRoute) router.HandlerFunc {
+	r.mu.RLock()
+	authn := r.authn
+	authorizer := r.authorizer
+	mws := make([]router.Middleware, len(r.middlewares))
+	copy(mws, r.middlewares)
+	gmws := make([]router.Middleware, len(r.globalMiddlewares))
+	copy(gmws, r.globalMiddlewares)
+	r.mu.RUnlock()
+
+	wrapped := h
+
+	// 1. Apply RBAC (innermost)
+	next := wrapped
+	wrapped = func(ctx router.Context) {
+		// Public routes: always allowed
+		if route.info.Public {
+			next(ctx)
+			return
+		}
+
+		// Private by default: if it's not Public() and no permission, deny.
+		// Requires explicitly called:
+		if route.info.Resource != "" {
+			if authorizer == nil {
+				ctx.WriteStatus(http.StatusInternalServerError)
+				ctx.Write([]byte("Authorizer not configured"))
+				return
+			}
+			if !authorizer(ctx.UserID(), route.info.Resource, route.info.Action) {
+				ctx.WriteStatus(http.StatusForbidden)
+				ctx.Write([]byte("Forbidden\n"))
+				return
+			}
+			next(ctx)
+			return
+		}
+
+		// If neither Public() nor Requires() is set, it's a private route.
+		// Anonymous users (empty UserID) are forbidden by default.
+		if ctx.UserID() == "" {
+			ctx.WriteStatus(http.StatusForbidden)
+			ctx.Write([]byte("Forbidden\n"))
+			return
+		}
+		next(ctx)
+	}
+
+	// 2. Apply local middlewares
+	for i := 0; i < len(mws); i++ {
+		wrapped = mws[i](wrapped)
+	}
+	// 3. Apply global middlewares
+	for i := 0; i < len(gmws); i++ {
+		wrapped = gmws[i](wrapped)
+	}
+
+	// 4. Apply Authn middleware (if any)
+	if authn != nil {
+		wrapped = authn(wrapped)
+	}
+
+	return wrapped
 }
 
 func (r *httpRouter) Socket(path string, h router.SocketFunc) router.Route {
