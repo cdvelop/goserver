@@ -23,10 +23,10 @@ func TestRouterRegistration(t *testing.T) {
 	h.RegisterRoutes(func(r router.Router) {
 		r.Get("/hello", func(ctx router.Context) {
 			ctx.Write([]byte("world"))
-		})
+		}).Public()
 		r.Post("/echo", func(ctx router.Context) {
 			ctx.Write(ctx.Body())
-		})
+		}).Public()
 	})
 
 	var wg sync.WaitGroup
@@ -84,7 +84,7 @@ func TestRouterMiddleware(t *testing.T) {
 		})
 		r.Get("/mid", func(ctx router.Context) {
 			ctx.Write([]byte("ok"))
-		})
+		}).Public()
 	})
 
 	var wg sync.WaitGroup
