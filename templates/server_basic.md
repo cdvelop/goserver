@@ -11,6 +11,8 @@ You can modify this server according to your needs.
 package main
 
 import (
+	"log"
+
 	"github.com/tinywasm/env"
 	"github.com/tinywasm/server/httpd"
 )
@@ -31,12 +33,25 @@ func main() {
 		publicDir = "{{.PublicDir}}"
 	}
 
-	httpd.New(httpd.Config{
+	s := httpd.New(httpd.Config{
 		Port:      port,
 		PublicDir: publicDir,
 		Gzip:      true,
 		NoCache:   env.Arg(argNoCache) == "true", // default false: cache enabled
 		Health:    true,
-	}).ListenAndServe()
+	})
+
+	// This process runs standalone (External mode), so routes registered via
+	// ServerHandler.RegisterRoutes in Internal mode do NOT carry over here —
+	// those are Go closures in the dev process and can't cross the process
+	// boundary. Add your real routes/API modules directly below, e.g.:
+	//   s.Router().Get("/api/hello", func(ctx router.Context) { ... })
+	//   s.Mount(myAPIModule) // github.com/tinywasm/router.APIModule
+	//
+	// This file is only generated once (never overwritten) — edit it freely.
+
+	if err := s.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
 ```

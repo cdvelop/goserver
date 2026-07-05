@@ -1,48 +1,51 @@
-# goserver
+# tinywasm/server
 <img src="docs/img/badges.svg">
-# goserver
-
-This README documents only the public API exported by the `goserver` package.
 
 Short summary
  - `server` provides a specialized HTTP server handler for TinyWASM applications.
  - It operates in two execution modes:
-    1. **Internal (Default)**: Runs a lightweight `net/http` server within the application process. Best for development speed and zero-file generation start.
+    1. **Internal (Default)**: Runs a lightweight `net/http` server within the application process, routed via `httpd.NewRouter`. Best for development speed and zero-file generation start.
     2. **External**: Generates a standalone main Go file, compiles it, and runs it as a separate process. Best for customization and production-like validation.
  - It also supports two compilation modes: **In-Memory** (default) and **On-Disk**.
  - It seamlessly handles the transition between execution modes via `SetExternalServerMode`.
+ - The `httpd` subpackage (`github.com/tinywasm/server/httpd`) is the batteries-included `router.Router` adapter used internally and available for production use (see below).
 
 Public API (types and functions)
 
-- type `Config`
-	- Fields:
-		- `AppRootDir string`
-		- `SourceDir string` (Default: `"web"`)
-		- `OutputDir string` (Default: `"web"`)
-		- `PublicDir string` (Default: `"web/public"`)
-		- `AppPort string` (Default: `"8080"`)
-		- `Routes []func(mux *http.ServeMux)` — Register HTTP handlers for Internal mode.
-		- `ArgumentsForCompilingServer func() []string`
-		- `ArgumentsToRunServer func() []string`
-		- `Logger func(message ...any)`
-		- `ExitChan chan bool`
-
-- func `NewConfig() *Config` — returns a new Config with default values.
+- func `New() *ServerHandler` — creates a handler with default `Config` (`AppRootDir: "."`, `SourceDir/OutputDir: "web"`, `AppPort: "6060"`). Configure it with the setters below (fluent methods return `*ServerHandler` where noted).
 
 - type `ServerHandler`
-	- Construct with: `New(c *Config) *ServerHandler`
-	- Exported methods:
-		- `StartServer(wg *sync.WaitGroup)` — Starts the server (async).
-		- `SetExternalServerMode(external bool) error` — Switches between Internal and External execution modes. When switching to External, it generates files (if missing), compiles, and starts the process.
-		- `CreateTemplateServer() error` — Legacy method specifically for transitioning from Internal to External mode.
-		- `SetCompilationOnDisk(onDisk bool)` — Switches between In-Memory and On-Disk compilation artifacts.
-		- `RestartServer() error` — Restarts the server.
-		- `NewFileEvent(...)` — Handles hot-reloads (recompiles external server or no-op/refresh for internal).
+	- Setters:
+		- `SetAppRootDir(dir string)`
+		- `SetSourceDir(dir string)`
+		- `SetOutputDir(dir string)`
+		- `SetPublicDir(dir string) *ServerHandler`
+		- `SetMainInputFile(name string)`
+		- `SetPort(port string)` / `Port() string`
+		- `SetHTTPS(enabled bool) *ServerHandler`
+		- `SetLogger(fn func(...any)) *ServerHandler`
+		- `SetExitChan(ch chan bool) *ServerHandler`
+		- `SetOpenBrowser(fn func(port string, https bool)) *ServerHandler`
+		- `SetStore(s Store) *ServerHandler`
+		- `SetUI(ui UI) *ServerHandler`
+		- `SetBeforeExternalServerStart(fn func() error) *ServerHandler` — hook invoked synchronously before every external-mode start.
+		- `SetGitIgnoreAdd(fn func(string) error) *ServerHandler`
+		- `SetCompileArgs(fn func() []string)`
+		- `SetRunArgs(fn func() []string)`
+		- `SetDisableGlobalCleanup(disable bool)`
+	- Routing:
+		- `RegisterRoutes(fn func(router.Router))` — appends a route-registration callback (using `github.com/tinywasm/router`'s `Router` contract). Call before `StartServer`. Used by both Internal and External modes.
+	- Lifecycle:
+		- `StartServer(wg *sync.WaitGroup)` — starts the server (async).
+		- `StopServer() error`
+		- `RestartServer() error`
+		- `SetExternalServerMode(external bool) error` — switches between Internal and External execution modes. When switching to External, it generates files (if missing), compiles, and starts the process. Cannot switch back to Internal.
+		- `NewFileEvent(fileName, extension, filePath, event string) error` — handles hot-reloads (recompiles external server or no-op for internal).
 		- `MainInputFileRelativePath() string`
 		- `UnobservedFiles() []string`
 
 Notes and behaviour
-- **Routes Registration**: Use `Config.Routes` to register handlers (e.g., static assets, API endpoints) so they work immediately in Internal mode.
+- **Routes Registration**: Use `RegisterRoutes` to register handlers via the `router.Router` contract (e.g., `r.Get("/path", handler)`) so they work immediately in Internal mode and are carried over to External mode.
 - **Port Management**: When switching modes, the handler automatically waits for the port to be free before starting the new strategy.
 
 Minimal usage example
@@ -52,37 +55,56 @@ package main
 
 import (
     "fmt"
-    "net/http"
     "os"
     "sync"
+
+    "github.com/tinywasm/router"
     "github.com/tinywasm/server"
 )
 
 func main() {
-    // Define a route function
-    myRoute := func(mux *http.ServeMux) {
-        mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-            fmt.Fprint(w, "Hello from Internal Server!")
+    handler := server.New()
+    handler.SetAppRootDir(".")
+    handler.SetLogger(func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) })
+
+    handler.RegisterRoutes(func(r router.Router) {
+        r.Get("/hello", func(ctx router.Context) {
+            fmt.Fprint(ctx, "Hello from Internal Server!")
         })
-    }
-
-    cfg := &server.Config{
-        AppRootDir:           ".",
-        Routes:               []func(*http.ServeMux){myRoute},
-        Logger:               func(messages ...any) { fmt.Fprintln(os.Stdout, messages...) },
-    }
-
-    handler := server.New(cfg)
+    })
 
     var wg sync.WaitGroup
     wg.Add(1)
     go handler.StartServer(&wg)
     wg.Wait()
-    
+
     // To switch to external mode later:
     // handler.SetExternalServerMode(true)
 }
 ```
 
+## `httpd` subpackage
+
+`github.com/tinywasm/server/httpd` implements `router.Router`/`router.Context` on top of
+`net/http`, with production batteries built in: gzip, no-cache headers, static file
+serving, TLS (AutoCert/custom cert/DevTLS), a `/health` endpoint, an optional `/_routes`
+JSON listing, and closed-by-default RBAC enforcement (`Config.Authn` for global identity,
+`Config.Authorize` for per-route `Requires(resource, action)` checks; routes must opt into
+`Public()` to allow anonymous access).
+
+```go
+s := httpd.New(httpd.Config{
+    Port:   "8080",
+    Health: true,
+})
+s.Mount(myAPIModule) // github.com/tinywasm/router.APIModule
+if err := s.ListenAndServe(); err != nil {
+    log.Fatal(err)
+}
+```
+
+`Handler()` returns the fully wired `http.Handler` (static files, batteries, routes, RBAC)
+without opening a port, for use with `httptest`. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+for design details.
 
 ## [Contributing](https://github.com/cdvelop/cdvelop/blob/main/CONTRIBUTING.md)

@@ -60,7 +60,11 @@ func TestConcurrentRequests_NoRace(t *testing.T) {
 
 	var wg sync.WaitGroup
 	n := 200
-	client := &http.Client{}
+	// DisableKeepAlives: 200 concurrent requests hammering a local server can
+	// race a pooled idle connection against the server closing/reusing it,
+	// which net/http logs as "Unsolicited response received on idle HTTP
+	// channel". A fresh connection per request avoids that race entirely.
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	urls := []struct {
 		url  string
@@ -171,7 +175,7 @@ func TestConcurrentAuthorizerCalls(t *testing.T) {
 
 	var wg sync.WaitGroup
 	n := 100
-	client := &http.Client{}
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	for i := 0; i < n; i++ {
 		wg.Add(1)
