@@ -33,10 +33,13 @@ func TestConcurrentRequests_NoRace(t *testing.T) {
 		Health:         true,
 		Gzip:           true,
 		RoutesEndpoint: true,
-		Identify: func(ctx router.Context) string {
-			return ctx.GetHeader("X-User")
+		Authn: func(next router.HandlerFunc) router.HandlerFunc {
+			return func(ctx router.Context) {
+				ctx.SetUserID(ctx.GetHeader("X-User"))
+				next(ctx)
+			}
 		},
-		Authorizer: func(userID, resource, action string) bool {
+		Authorize: func(userID, resource, action string) bool {
 			return userID == "admin"
 		},
 	}
@@ -44,7 +47,7 @@ func TestConcurrentRequests_NoRace(t *testing.T) {
 
 	s.Router().Get("/api/hello", func(ctx router.Context) {
 		ctx.Write([]byte("hi"))
-	})
+	}).Public()
 	s.Router().Get("/api/secret", func(ctx router.Context) {
 		ctx.Write([]byte("secret"))
 	}).Requires("top", "secret")
@@ -143,10 +146,13 @@ func TestConcurrentAuthorizerCalls(t *testing.T) {
 
 	cfg := Config{
 		Port: port,
-		Identify: func(ctx router.Context) string {
-			return ctx.GetHeader("X-User")
+		Authn: func(next router.HandlerFunc) router.HandlerFunc {
+			return func(ctx router.Context) {
+				ctx.SetUserID(ctx.GetHeader("X-User"))
+				next(ctx)
+			}
 		},
-		Authorizer: func(userID, resource, action string) bool {
+		Authorize: func(userID, resource, action string) bool {
 			// Simulate some work or shared state access
 			return userID == "admin"
 		},

@@ -16,7 +16,7 @@ func (m fakeAPIModule) ModelName() string {
 func (m fakeAPIModule) MountAPI(r router.Router) {
 	r.Get("/mounted", func(ctx router.Context) {
 		ctx.Write([]byte("mounted ok"))
-	})
+	}).Public()
 }
 
 func TestMount(t *testing.T) {
@@ -25,7 +25,10 @@ func TestMount(t *testing.T) {
 
 	s.Mount(fakeAPIModule{})
 
-	handler := s.wrapWithBatteries(s.mux)
+	handler, err := s.Handler()
+	if err != nil {
+		t.Fatalf("Handler failed: %v", err)
+	}
 
 	req := httptest.NewRequest("GET", "/mounted", nil)
 	w := httptest.NewRecorder()

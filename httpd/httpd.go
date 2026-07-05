@@ -22,8 +22,8 @@ type Config struct {
 	Health    bool
 	Logger    func(...any)
 
-	Identify       func(ctx router.Context) string
-	Authorizer     func(userID, resource, action string) bool
+	Authn          router.Middleware
+	Authorize      func(userID, resource, action string) bool
 	RoutesEndpoint bool
 
 	TLS TLSConfig
@@ -67,7 +67,7 @@ func (s *Server) Mount(m ...router.APIModule) *Server {
 	return s
 }
 
-func (s *Server) ListenAndServe() error {
+func (s *Server) Handler() (http.Handler, error) {
 	if s.config.Health {
 		s.mux.HandleFunc(HealthPath, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -78,20 +78,29 @@ func (s *Server) ListenAndServe() error {
 	s.registerRoutesEndpoint()
 
 	if err := s.validateRBAC(); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Set authorizer for the router to use in closures
-	s.router.setAuthorizer(s.config.Identify, s.config.Authorizer)
+	s.router.setAuthorizer(s.config.Authn, s.config.Authorize)
 
 	if err := s.validateTLS(); err != nil {
-		return err
+		return nil, err
 	}
 
 	var handler http.Handler = s.mux
 
 	// Apply static file serving and global batteries as a wrapper
 	handler = s.wrapWithBatteries(handler)
+
+	return handler, nil
+}
+
+func (s *Server) ListenAndServe() error {
+	handler, err := s.Handler()
+	if err != nil {
+		return err
+	}
 
 	srv := &http.Server{
 		Addr:         ":" + s.config.Port,
