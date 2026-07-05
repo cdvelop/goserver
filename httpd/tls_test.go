@@ -149,7 +149,8 @@ func TestTLS_CertFileKeyFile_Serves(t *testing.T) {
 	// 3. Test request
 	client := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
+			DisableKeepAlives: true,
 		},
 	}
 
