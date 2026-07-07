@@ -31,8 +31,8 @@ github.com/tinywasm/gorun v0.0.24 h1:qduMrpcw0nf65nx8Fi2duBWN7pCIwXxePPa9KL0rmWM
 github.com/tinywasm/gorun v0.0.24/go.mod h1:9pApF2ZoaH/km6kGBVxL5WlStOoLwEZiV1uG4R4qeKo=
 github.com/tinywasm/json v0.5.8 h1:z8c19JUozpj1HrMRP67eWpdkX8zOaXCL8AYgYbADNss=
 github.com/tinywasm/json v0.5.8/go.mod h1:jHJY6T621NmnrqFn2ze3iaNcoMb9QWySetI30+jhFNg=
-github.com/tinywasm/mcp v0.1.16 h1:/4PDwbKIZrXh0PXU4aMPIoSYU4oOH/S27JpYqQGxnQs=
-github.com/tinywasm/mcp v0.1.16/go.mod h1:fs3T46XaV4cDzQs3Jwr60MKDkyeMUo30pqKSLpkzDqA=
+github.com/tinywasm/mcp v0.1.17 h1:aOTwvWGSqRJF2ykU3mNgkLzKT1X45eVhRN4BOyN0M6A=
+github.com/tinywasm/mcp v0.1.17/go.mod h1:buwfBL++Ljmwxyz9q05J7tFIwzXXRcD6I5hBAtJnuRw=
 github.com/tinywasm/model v0.0.5 h1:wbmKeOHAp71UNGevuCJTgYLWdIf94oo+RYpKL2kQc2k=
 github.com/tinywasm/model v0.0.5/go.mod h1:X+zb1GzaP9gLXEFVi+GSmZ4H9+W0UQnN2K9KcxE7vTE=
 github.com/tinywasm/router v0.1.3 h1:RMG7+6JaRjU6sYgkCxEWkxNV26fgFDP4tnUovPIfC6o=
