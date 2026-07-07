@@ -5,10 +5,10 @@ go 1.25.2
 require (
 	github.com/smallstep/truststore v0.13.0
 	github.com/tinywasm/devflow v0.4.36
-	github.com/tinywasm/fmt v0.24.6
+	github.com/tinywasm/fmt v0.25.0
 	github.com/tinywasm/gobuild v0.0.26
 	github.com/tinywasm/gorun v0.0.24
-	github.com/tinywasm/router v0.1.2
+	github.com/tinywasm/router v0.1.3
 	golang.org/x/crypto v0.53.0
 )
 
@@ -18,8 +18,9 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/tinywasm/context v0.0.18 // indirect
 	github.com/tinywasm/fetch v0.1.24 // indirect
-	github.com/tinywasm/json v0.5.6 // indirect
-	github.com/tinywasm/mcp v0.1.15 // indirect
+	github.com/tinywasm/json v0.5.8 // indirect
+	github.com/tinywasm/mcp v0.1.16 // indirect
+	github.com/tinywasm/model v0.0.4 // indirect
 	github.com/tinywasm/time v0.5.0 // indirect
 	github.com/tinywasm/unixid v0.2.23 // indirect
 	github.com/tinywasm/wizard v0.0.22 // indirect
