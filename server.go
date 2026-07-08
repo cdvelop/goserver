@@ -79,7 +79,7 @@ type Config struct {
 	MainInputFile               string               // main input file name (default: "main.go", can be "server.go", etc.)
 	ArgumentsForCompilingServer func() []string      // e.g., []string{"-X 'main.version=v1.0.0'"}
 	ArgumentsToRunServer        func() []string      // e.g., []string{"dev"}
-	AppPort                     string               // e.g., 6060
+	AppPort                     string               // e.g., 8080
 	Https                       bool                 // true if HTTPS is enabled
 	DisableGlobalCleanup        bool                 // If true, disables global cleanup in gorun during restarts
 	Logger                      func(message ...any) // Logger function
@@ -99,7 +99,7 @@ func New() *ServerHandler {
 		OutputDir:                   "web",
 		PublicDir:                   "web/public",
 		MainInputFile:               "main.go",
-		AppPort:                     "6060",
+		AppPort:                     "8080",
 		Logger:                      nil,
 		ExitChan:                    make(chan bool),
 		ArgumentsForCompilingServer: func() []string { return nil },

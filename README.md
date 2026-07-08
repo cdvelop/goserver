@@ -12,7 +12,7 @@ Short summary
 
 Public API (types and functions)
 
-- func `New() *ServerHandler` — creates a handler with default `Config` (`AppRootDir: "."`, `SourceDir/OutputDir: "web"`, `AppPort: "6060"`). Configure it with the setters below (fluent methods return `*ServerHandler` where noted).
+- func `New() *ServerHandler` — creates a handler with default `Config` (`AppRootDir: "."`, `SourceDir/OutputDir: "web"`, `AppPort: "8080"`). Configure it with the setters below (fluent methods return `*ServerHandler` where noted).
 
 - type `ServerHandler`
 	- Setters:
