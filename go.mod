@@ -20,7 +20,7 @@ require (
 	github.com/tinywasm/fmt v0.25.1 // indirect
 	github.com/tinywasm/json v0.5.10 // indirect
 	github.com/tinywasm/mcp v0.1.20 // indirect
-	github.com/tinywasm/model v0.0.7 // indirect
+	github.com/tinywasm/model v0.0.8 // indirect
 	github.com/tinywasm/time v0.5.0 // indirect
 	github.com/tinywasm/unixid v0.2.23 // indirect
 	github.com/tinywasm/wizard v0.0.22 // indirect
