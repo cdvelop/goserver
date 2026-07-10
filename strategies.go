@@ -21,6 +21,8 @@ import (
 
 var ErrUnsupportedEvent = errors.New("server: unsupported file event, no rebuild triggered")
 
+const DefaultNoRoutesMsg = "<h3>No routes registered in In-Memory Server</h3>"
+
 var contentChangeEvents = []string{"write", "create", "rename"}
 
 type ServerStrategy interface {
@@ -63,8 +65,15 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 
 	// WaitGroup Done is handled at the end of this function (blocking until exit)
 
-	mux := http.NewServeMux()
-	r := httpd.NewRouter(mux)
+	hcfg := httpd.Config{
+		Port:      s.handler.Port(),
+		PublicDir: filepath.Join(s.handler.AppRootDir, s.handler.PublicDir),
+		Gzip:      true,
+		NoCache:   true,
+		Logger:    s.handler.log,
+	}
+	srvObj := httpd.New(hcfg)
+	r := srvObj.Router()
 
 	if len(s.handler.routes) > 0 {
 		for _, registerConfig := range s.handler.routes {
@@ -73,14 +82,45 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	} else {
 		// Default handler if no routes provided
 		r.Get("/", func(ctx router.Context) {
+			indexPath := filepath.Join(hcfg.PublicDir, "index.html")
+			if _, err := os.Stat(indexPath); err == nil {
+				if content, err := os.ReadFile(indexPath); err == nil {
+					ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+					h := func(c router.Context) {
+						c.Write(content)
+					}
+					h = httpd.NoCache(h)
+					h = httpd.Gzip(h)
+					h(ctx)
+					return
+				}
+			}
+
 			ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-			fmt.Fprint(ctx, "<h3>No routes registered in In-Memory Server</h3>")
-		})
+			h := func(c router.Context) {
+				fmt.Fprint(c, DefaultNoRoutesMsg)
+			}
+			h = httpd.NoCache(h)
+			h = httpd.Gzip(h)
+			h(ctx)
+		}).Public()
+	}
+
+	handler, err := srvObj.Handler()
+	if err != nil {
+		s.handler.log("Internal Server handler error:", err)
+		s.mu.Lock()
+		s.running = false
+		s.mu.Unlock()
+		if wg != nil {
+			wg.Done()
+		}
+		return err
 	}
 
 	s.server = &http.Server{
 		Addr:    ":" + s.handler.Port(),
-		Handler: mux,
+		Handler: handler,
 	}
 
 	if s.handler.Https {

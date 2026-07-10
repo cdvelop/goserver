@@ -20,8 +20,7 @@ func (m *mockStore) Get(key string) (string, error) { return m.data[key], nil }
 func (m *mockStore) Set(key, value string) error    { m.data[key] = value; return nil }
 
 func isExternal(val string) bool {
-	// Value() returns "Execution External:T" or "Execution External:F"
-	return strings.Contains(val, ":T")
+	return val == "external"
 }
 
 func TestServerHandler_Value(t *testing.T) {
@@ -34,17 +33,30 @@ func TestServerHandler_Value(t *testing.T) {
 	h.SetSourceDir("src")
 	h.SetExitChan(exitChan)
 
-	// Case 1: Default (Internal + In-Memory)
-	if got := h.Value(); got != "Execution External:F" {
-		t.Errorf("default Value() = %q", got)
+	// Case 1: Default (Internal)
+	if got := h.Value(); got != "internal" {
+		t.Errorf("default Value() = %q, want internal", got)
 	}
 
 	// Case 2: Modified state
-	// We cannot set h.executionInternal directly as it is unexported.
-	// We use SetExternalServerMode(true) which has side effects (file gen, start).
 	h.SetExternalServerMode(true)
-	if got := h.Value(); got != "Execution External:T" {
-		t.Errorf("modified Value() = %q", got)
+	if got := h.Value(); got != "external" {
+		t.Errorf("modified Value() = %q, want external", got)
+	}
+}
+
+func TestServerHandler_Options(t *testing.T) {
+	h := server.New()
+	opts := h.Options()
+	if len(opts) != 2 {
+		t.Fatalf("expected 2 options, got %d", len(opts))
+	}
+
+	if _, ok := opts[0]["internal"]; !ok {
+		t.Errorf("expected first option to be internal, got %v", opts[0])
+	}
+	if _, ok := opts[1]["external"]; !ok {
+		t.Errorf("expected second option to be external, got %v", opts[1])
 	}
 }
 
@@ -54,11 +66,9 @@ func TestServerHandler_Change(t *testing.T) {
 		input    string
 		wantExec bool // true = internal, false = external
 	}{
-		{"external T", "Execution External:T", false},
-		{"external F", "Execution External:F", true}, // Technically no-op if internal already
-		{"lowercase", "Execution External:t", false},
-		{"full words", "Execution External:true", false},
-		{"uppercase words", "Execution External:TRUE", false},
+		{"external", "external", false},
+		{"internal", "internal", true}, // Technically no-op if internal already
+		{"bogus", "bogus", true},       // Should not change mode
 	}
 
 	for _, tt := range tests {
@@ -98,7 +108,7 @@ func TestSetExternalServerMode_SwitchesToExternal(t *testing.T) {
 	h.SetExitChan(exitChan)
 
 	if isExternal(h.Value()) {
-		t.Fatal("expected initial executionInternal to be true (External:F)")
+		t.Fatal("expected initial executionInternal to be true (internal)")
 	}
 
 	if err := h.SetExternalServerMode(true); err != nil {
@@ -106,7 +116,7 @@ func TestSetExternalServerMode_SwitchesToExternal(t *testing.T) {
 	}
 
 	if !isExternal(h.Value()) {
-		t.Fatal("expected executionInternal to be false (External:T) after switching to external")
+		t.Fatal("expected executionInternal to be false (external) after switching to external")
 	}
 
 	// Verify file was generated
@@ -142,39 +152,6 @@ func TestSetExternalServerMode_PreventsSwitchingToInternal(t *testing.T) {
 	// 3. Verify state remains External
 	if !isExternal(h.Value()) {
 		t.Fatal("expected executionInternal to remain false (external) after failed switch")
-	}
-}
-
-func TestSetExternalServerMode_BlocksInternal_WhenModified(t *testing.T) {
-	// This test is now redundant or covers a subset of PreventsSwitchingToInternal
-	// checks, but we'll keep it simple to verify behavior even with modifications.
-	tmpData := t.TempDir()
-	exitChan := make(chan bool, 1)
-	exitChan <- true
-
-	h := server.New()
-	h.SetAppRootDir(tmpData)
-	h.SetSourceDir("src")
-	h.SetExitChan(exitChan)
-
-	if err := h.SetExternalServerMode(true); err != nil {
-		t.Logf("switch to external error: %v", err)
-	}
-
-	// Modify generated file (irrelevant now, but good to ensure no regressions)
-	targetPath := filepath.Join(tmpData, "src", "main.go")
-	err := os.WriteFile(targetPath, []byte("package main\n\nfunc main() { /* modified */ }\n"), 0644)
-	if err != nil {
-		t.Fatalf("failed to modify server file: %v", err)
-	}
-
-	err = h.SetExternalServerMode(false)
-	if err == nil {
-		t.Fatal("expected error switching back to internal")
-	}
-	// The specific error message about "customized" is gone, replaced by the generic block
-	if !strings.Contains(err.Error(), "cannot switch back") {
-		t.Errorf("expected error message to mention 'cannot switch back', got: %v", err)
 	}
 }
 
@@ -248,14 +225,10 @@ func TestModeSwitchWhileRunning_DoesNotHang(t *testing.T) {
 	// Give server time to start
 	time.Sleep(200 * time.Millisecond)
 
-	// Call Change() to switch to external mode - this is what app does via TUI
-	// This will block until compilation finishes/fails.
-	// Since we don't pre-fill ExitChan here (we want to test hang), we rely on compilation error or timeout.
-	// But in test env, compilation might fail.
-
+	// Call Change() to switch to external mode
 	done := make(chan struct{})
 	go func() {
-		h.Change("Execution External:T")
+		h.Change("external")
 		close(done)
 	}()
 
@@ -322,9 +295,9 @@ func TestStartServer_DetectsExistingServerFile(t *testing.T) {
 	h.SetMainInputFile("server.go")
 	h.SetExitChan(exitChan)
 
-	// Expectation: Initially Internal
+	// Expectation: Initially internal
 	if isExternal(h.Value()) {
-		t.Error("New() should initialize in Internal mode")
+		t.Error("New() should initialize in internal mode")
 	}
 
 	// Call StartServer to trigger auto-detection
@@ -333,6 +306,6 @@ func TestStartServer_DetectsExistingServerFile(t *testing.T) {
 	h.StartServer(&wg)
 
 	if !isExternal(h.Value()) {
-		t.Errorf("StartServer() should switch to External mode when server file exists, but got %s", h.Value())
+		t.Errorf("StartServer() should switch to external mode when server file exists, but got %s", h.Value())
 	}
 }

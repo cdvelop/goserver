@@ -1,51 +1,47 @@
 package server
 
-import "github.com/tinywasm/fmt"
-
 func (h *ServerHandler) Name() string {
 	return "SERVER"
 }
 
-// Label implements HandlerEdit.Label
+// Label implements HandlerSelection.Label
 func (h *ServerHandler) Label() string {
-	return "Server Modes"
+	return "Execution"
 }
 
-// Value implements HandlerEdit.Value
+// Value implements HandlerSelection.Value
 func (h *ServerHandler) Value() string {
 	h.strategyMu.RLock()
-	isExternal := !h.executionInternal
+	isInternal := h.executionInternal
 	h.strategyMu.RUnlock()
 
-	exec := "F"
-	if isExternal {
-		exec = "T"
+	if isInternal {
+		return execModeInternal
 	}
-	return "Execution External:" + exec
+	return execModeExternal
 }
 
-// Change implements HandlerEdit.Change
+// Options implements HandlerSelection.Options
+func (h *ServerHandler) Options() []map[string]string {
+	return []map[string]string{
+		{execModeInternal: "Internal"},
+		{execModeExternal: "External"},
+	}
+}
+
+// Change implements HandlerSelection.Change
 func (h *ServerHandler) Change(newValue string) {
-	pairs := fmt.Convert(newValue).Split(",")
-
-	for _, pair := range pairs {
-		// e.g., pair = "Execution External:T" or " Build OnDisk:F"
-		s := fmt.Convert(pair).TrimSpace().String()
-		pos := fmt.Index(s, ":")
-		if pos == -1 {
-			continue
+	switch newValue {
+	case execModeInternal:
+		if err := h.SetExternalServerMode(false); err != nil {
+			h.log("Mode change error:", err)
 		}
-
-		key := fmt.Convert(s[:pos]).TrimSpace().String()
-		val := fmt.Convert(s[pos+1:]).TrimSpace().ToLower().String()
-		isTrue := val == "t" || val == "true"
-
-		switch key {
-		case "Execution External":
-			if err := h.SetExternalServerMode(isTrue); err != nil {
-				h.log("Mode change error:", err)
-			}
+	case execModeExternal:
+		if err := h.SetExternalServerMode(true); err != nil {
+			h.log("Mode change error:", err)
 		}
+	default:
+		h.log("Error: Unknown execution mode:", newValue)
 	}
 
 	h.RefreshUI()
