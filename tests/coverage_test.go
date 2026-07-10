@@ -25,8 +25,8 @@ func TestServerHandler_Getters(t *testing.T) {
 	tmp := t.TempDir()
 	h := newTestHandler(t, "src", "out", tmp)
 
-	if label := h.Label(); label != "Server Modes" {
-		t.Errorf("expected Label 'Server Modes', got '%s'", label)
+	if label := h.Label(); label != "Execution" {
+		t.Errorf("expected Label 'Execution', got '%s'", label)
 	}
 
 	if name := h.Name(); name != "SERVER" {

@@ -42,6 +42,9 @@ const (
 	StoreKeyExternalServer = "server_external_mode"
 	EnvKeyServerPort       = "SERVER_PORT"
 	EnvKeyServerHttps      = "SERVER_HTTPS"
+
+	execModeInternal = "internal"
+	execModeExternal = "external"
 )
 
 // TestMode is a global flag to indicate the server is running in a test environment.

@@ -25,3 +25,10 @@ When a project lacks a custom `web/server.go` or switches to external mode witho
 1. **Simple Entry Point**: `httpd.New(config).Mount(modules).ListenAndServe()` is the only way to start the server.
 2. **Standard Library Based**: Uses `net/http` internally but doesn't expose it in the public API.
 3. **Fails Fast**: Validates configuration (like TLS modes or RBAC requirements) at startup rather than at runtime.
+
+## RBAC and Public Assets
+
+The server follows a **secure-by-default** model where routes are private unless explicitly marked as `Public()`. However, for a smooth development experience:
+
+- **Static Assets**: Files served from `PublicDir` (e.g., WASM binaries, JS, CSS) are always public. They bypass the RBAC middleware.
+- **Root Path (`/`) in Development**: The internal strategy registers a default public route for `/` that serves `PublicDir/index.html` or a diagnostic message. This ensures that the frontend application is accessible immediately without manual RBAC configuration.

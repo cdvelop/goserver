@@ -31,3 +31,5 @@ require (
 	golang.org/x/text v0.38.0 // indirect
 	howett.net/plist v1.0.0 // indirect
 )
+
+replace github.com/tinywasm/model => github.com/tinywasm/model v0.0.6

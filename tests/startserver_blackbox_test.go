@@ -50,7 +50,7 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	}
 
 	// Verify we are in Internal mode
-	if strings.Contains(h.Value(), "External:T") {
+	if h.Value() == "external" {
 		t.Fatal("Expected Internal mode initially")
 	}
 
@@ -126,7 +126,7 @@ Found:
 		// So h.executionInternal should be false even if Start fails.
 	}
 
-	if !strings.Contains(h.Value(), "External:T") {
+	if h.Value() != "external" {
 		t.Error("Expected to be in External mode logic (h.executionInternal = false) even if compilation failed")
 	}
 }
