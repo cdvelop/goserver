@@ -4,7 +4,7 @@ go 1.25.2
 
 require (
 	github.com/smallstep/truststore v0.13.0
-	github.com/tinywasm/devflow v0.4.39
+	github.com/tinywasm/devflow v0.4.40
 	github.com/tinywasm/gobuild v0.0.26
 	github.com/tinywasm/gorun v0.0.24
 	github.com/tinywasm/router v0.1.4
@@ -19,7 +19,7 @@ require (
 	github.com/tinywasm/fetch v0.1.24 // indirect
 	github.com/tinywasm/fmt v0.25.1 // indirect
 	github.com/tinywasm/json v0.5.10 // indirect
-	github.com/tinywasm/mcp v0.1.19 // indirect
+	github.com/tinywasm/mcp v0.1.20 // indirect
 	github.com/tinywasm/model v0.0.7 // indirect
 	github.com/tinywasm/time v0.5.0 // indirect
 	github.com/tinywasm/unixid v0.2.23 // indirect
