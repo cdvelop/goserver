@@ -17,7 +17,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/tinywasm/context v0.0.18 // indirect
 	github.com/tinywasm/fetch v0.1.24 // indirect
-	github.com/tinywasm/fmt v0.25.2 // indirect
+	github.com/tinywasm/fmt v0.25.3 // indirect
 	github.com/tinywasm/json v0.5.11 // indirect
 	github.com/tinywasm/mcp v0.1.20 // indirect
 	github.com/tinywasm/model v0.0.8 // indirect
