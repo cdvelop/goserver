@@ -103,8 +103,13 @@ func (s *Server) Handler() (http.Handler, error) {
 
 	var handler http.Handler = s.mux
 
-	// Apply static file serving and global batteries as a wrapper
+	if s.config.PublicDir != "" {
+		s.router.PublicDir("/", s.config.PublicDir)
+	}
+
+	// Apply fallback for PublicDir and global batteries
 	handler = s.wrapWithBatteries(handler)
+	handler = s.wrapWithGlobalBatteries(handler)
 
 	return handler, nil
 }

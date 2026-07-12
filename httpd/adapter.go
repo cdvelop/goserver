@@ -3,6 +3,7 @@ package httpd
 import (
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/tinywasm/router"
@@ -151,9 +152,10 @@ type httpRouter struct {
 }
 
 type httpRoute struct {
-	info router.RouteInfo
-	h    router.HandlerFunc
-	sh   router.StreamFunc
+	info       router.RouteInfo
+	h          router.HandlerFunc
+	sh         router.StreamFunc
+	mwAppliedH router.HandlerFunc
 }
 
 func (r *httpRoute) Requires(resource string, action string) router.Route {
@@ -209,13 +211,35 @@ func (r *httpRouter) register(route *httpRoute) {
 			return
 		}
 
-		wrapped := r.applySecurityAndMiddleware(route.h, route)
-		ctx := &httpContext{w: w, r: req}
-		wrapped(ctx)
+		hctx := &httpContext{w: w, r: req}
+		r.mu.RLock()
+		if route.mwAppliedH == nil {
+			r.mu.RUnlock()
+			r.mu.Lock()
+			if route.mwAppliedH == nil {
+				hfunc := route.h
+				if hfunc == nil && route.sh != nil {
+					hfunc = func(ctx router.Context) {
+						if s, ok := ctx.(*httpContext); ok {
+							route.sh(&httpStreamer{httpContext: s})
+						}
+					}
+				}
+				route.mwAppliedH = r.applySecurityAndMiddleware(hfunc, route)
+			}
+			r.mu.Unlock()
+			r.mu.RLock()
+		}
+		handler := route.mwAppliedH
+		r.mu.RUnlock()
+
+		handler(hctx)
 	})
 }
 
 func (r *httpRouter) reRegister(route *httpRoute) {
+	// Reset pre-applied middleware on re-registration (new mux)
+	route.mwAppliedH = nil
 	if route.h != nil {
 		r.register(route)
 	} else if route.sh != nil {
@@ -253,34 +277,54 @@ func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
 	return route
 }
 
-func (r *httpRouter) registerStream(route *httpRoute) {
-	r.mux.HandleFunc(route.info.Path, func(w http.ResponseWriter, req *http.Request) {
-		hfunc := func(ctx router.Context) {
-			if s, ok := ctx.(*httpContext); ok {
-				route.sh(&httpStreamer{httpContext: s})
-			}
-		}
+func (r *httpRouter) PublicAsset(path string, h router.HandlerFunc) {
+	route := &httpRoute{
+		info: router.RouteInfo{Method: http.MethodGet, Path: path, Public: true},
+		h:    h,
+	}
+	r.mu.Lock()
+	r.routes = append(r.routes, route)
+	r.mu.Unlock()
+	r.register(route)
+}
 
-		wrapped := r.applySecurityAndMiddleware(hfunc, route)
-		ctx := &httpContext{w: w, r: req}
-		wrapped(ctx)
-	})
+func (r *httpRouter) PublicDir(prefix string, dir string) {
+	if !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+
+	route := &httpRoute{
+		info: router.RouteInfo{
+			Method: http.MethodGet,
+			Path:   prefix,
+			Public: true,
+			Dir:    dir,
+		},
+	}
+	r.mu.Lock()
+	r.routes = append(r.routes, route)
+	r.mu.Unlock()
+	// PublicDir is NOT registered in the mux. It's handled as a fallback in wrapWithBatteries.
+}
+
+func (r *httpRouter) registerStream(route *httpRoute) {
+	r.register(route)
 }
 
 func (r *httpRouter) applySecurityAndMiddleware(h router.HandlerFunc, route *httpRoute) router.HandlerFunc {
-	r.mu.RLock()
+	// These are local copies because we are already inside a lock when calling this (from register)
 	authn := r.authn
 	authorizer := r.authorizer
-	mws := make([]router.Middleware, len(r.middlewares))
-	copy(mws, r.middlewares)
-	gmws := make([]router.Middleware, len(r.globalMiddlewares))
-	copy(gmws, r.globalMiddlewares)
-	r.mu.RUnlock()
+	mws := r.middlewares
+	gmws := r.globalMiddlewares
 
 	wrapped := h
 
 	// 1. Apply RBAC (innermost)
 	next := wrapped
+	if next == nil {
+		next = func(ctx router.Context) {}
+	}
 	wrapped = func(ctx router.Context) {
 		// Public routes: always allowed
 		if route.info.Public {

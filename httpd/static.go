@@ -4,38 +4,70 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/tinywasm/router"
 )
 
 func (s *Server) wrapWithBatteries(handler http.Handler) http.Handler {
-	publicDir := s.config.PublicDir
-	var fs http.Handler
-	if publicDir != "" {
-		fs = http.FileServer(http.Dir(publicDir))
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Create a proxy ResponseWriter to catch 404
 		rec := &statusRecorder{ResponseWriter: w}
+
 		handler.ServeHTTP(rec, r)
 
-		if rec.notFound && fs != nil {
-			// Try static files
-			path := filepath.Join(publicDir, filepath.Clean(r.URL.Path))
-			shouldServe := false
-			if info, err := os.Stat(path); err == nil && !info.IsDir() {
-				shouldServe = true
-			} else if err == nil && info.IsDir() {
-				indexPath := filepath.Join(path, "index.html")
-				if _, err := os.Stat(indexPath); err == nil {
-					shouldServe = true
-				}
-			}
+		if rec.notFound && !rec.wroteHeader {
+			// Try dynamic fallbacks from PublicDir routes
+			s.router.mu.RLock()
+			routes := make([]*httpRoute, len(s.router.routes))
+			copy(routes, s.router.routes)
+			s.router.mu.RUnlock()
 
-			if shouldServe {
-				s.serveWithGlobalBatteries(w, r, fs)
-				return
+			for _, route := range routes {
+				if route.info.Dir == "" {
+					continue
+				}
+
+				prefix := route.info.Path
+				if !strings.HasPrefix(r.URL.Path, prefix) {
+					continue
+				}
+
+				relPath := strings.TrimPrefix(r.URL.Path, prefix)
+				fullPath := filepath.Join(route.info.Dir, filepath.Clean(relPath))
+
+				// Path traversal protection
+				absDir, err := filepath.Abs(route.info.Dir)
+				if err != nil {
+					continue
+				}
+				absPath, err := filepath.Abs(fullPath)
+				if err != nil {
+					continue
+				}
+				rel, err := filepath.Rel(absDir, absPath)
+				if err != nil || strings.HasPrefix(rel, "..") {
+					continue
+				}
+
+				info, err := os.Stat(fullPath)
+				shouldServe := false
+				if err == nil && !info.IsDir() {
+					shouldServe = true
+				} else if err == nil && info.IsDir() {
+					indexPath := filepath.Join(fullPath, "index.html")
+					if _, err := os.Stat(indexPath); err == nil {
+						fullPath = indexPath
+						shouldServe = true
+					}
+				}
+
+				if shouldServe {
+					// Serve the file directly using the original response writer.
+					// wrapWithGlobalBatteries (applied in Handler()) will handle compression.
+					http.ServeFile(w, r, fullPath)
+					return
+				}
 			}
 
 			// If still not found, send the original 404
@@ -45,18 +77,20 @@ func (s *Server) wrapWithBatteries(handler http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) serveWithGlobalBatteries(w http.ResponseWriter, r *http.Request, fs http.Handler) {
-	ctx := &httpContext{w: w, r: r}
-	h := func(ctx router.Context) {
-		fs.ServeHTTP(w, r)
-	}
-	if s.config.NoCache {
-		h = NoCache(h)
-	}
-	if s.config.Gzip {
-		h = Gzip(h)
-	}
-	h(ctx)
+func (s *Server) wrapWithGlobalBatteries(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := func(ctx router.Context) {
+			hctx := ctx.(*httpContext)
+			handler.ServeHTTP(hctx.w, r)
+		}
+		if s.config.NoCache {
+			h = NoCache(h)
+		}
+		if s.config.Gzip {
+			h = Gzip(h)
+		}
+		h(&httpContext{w: w, r: r})
+	})
 }
 
 type statusRecorder struct {
