@@ -80,8 +80,9 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 			registerConfig(r)
 		}
 	} else {
-		// Default handler if no routes provided
-		r.Get("/", func(ctx router.Context) {
+		// Default handler if no routes provided. It serves index.html, so it is an
+		// asset: public by construction, never Get(...).Public().
+		r.PublicAsset("/", func(ctx router.Context) {
 			indexPath := filepath.Join(hcfg.PublicDir, "index.html")
 			if _, err := os.Stat(indexPath); err == nil {
 				if content, err := os.ReadFile(indexPath); err == nil {
@@ -103,7 +104,7 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 			h = httpd.NoCache(h)
 			h = httpd.Gzip(h)
 			h(ctx)
-		}).Public()
+		})
 	}
 
 	handler, err := srvObj.Handler()
