@@ -2,20 +2,55 @@ package httpd
 
 import (
 	"compress/gzip"
-	"io"
 	"net/http"
 	"strings"
 
 	"github.com/tinywasm/router"
 )
 
-type gzipResponseWriter struct {
-	io.Writer
+// lazyGzipWriter decides on the FIRST write whether to compress.
+//
+// It cannot decide earlier: the handler runs after the middleware, and a handler
+// may encode the body itself (tinywasm/client gzips the wasm binary and declares
+// Content-Encoding). Compressing on top of that ships gzip(gzip(body)); the browser
+// decompresses one layer, finds gzip magic (1f 8b 08 00) where the wasm magic word
+// should be, and the app never starts. Encoding an already-encoded body is always a
+// bug, so the transport refuses to do it — whatever the handler is.
+type lazyGzipWriter struct {
 	http.ResponseWriter
+	gz      *gzip.Writer
+	decided bool
 }
 
-func (w *gzipResponseWriter) Write(b []byte) (int, error) {
-	return w.Writer.Write(b)
+func (w *lazyGzipWriter) decide() {
+	if w.decided {
+		return
+	}
+	w.decided = true
+	if w.Header().Get("Content-Encoding") != "" {
+		return // the handler already encoded the body: pass it through untouched
+	}
+	w.Header().Set("Content-Encoding", "gzip")
+	w.gz = gzip.NewWriter(w.ResponseWriter)
+}
+
+func (w *lazyGzipWriter) WriteHeader(code int) {
+	w.decide()
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *lazyGzipWriter) Write(b []byte) (int, error) {
+	w.decide()
+	if w.gz != nil {
+		return w.gz.Write(b)
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *lazyGzipWriter) Close() {
+	if w.gz != nil {
+		w.gz.Close()
+	}
 }
 
 // Gzip middleware
@@ -33,13 +68,13 @@ func Gzip(next router.HandlerFunc) router.HandlerFunc {
 			return
 		}
 
-		hctx.SetHeader("Content-Encoding", "gzip")
-		gz := gzip.NewWriter(hctx.w)
-		defer gz.Close()
-
 		originalW := hctx.w
-		hctx.w = &gzipResponseWriter{Writer: gz, ResponseWriter: originalW}
-		defer func() { hctx.w = originalW }()
+		lw := &lazyGzipWriter{ResponseWriter: originalW}
+		hctx.w = lw
+		defer func() {
+			lw.Close()
+			hctx.w = originalW
+		}()
 
 		next(ctx)
 	}
