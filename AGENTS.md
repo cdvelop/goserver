@@ -26,3 +26,10 @@ a lo no exportado.
 Antes de añadir un test nuevo: si compila usando solo identificadores exportados,
 va en `tests/`. Si necesita un identificador no exportado, va junto al paquete que
 lo define — y solo ahí.
+
+## Seguridad y Archivos Estáticos
+
+- Para servir un archivo individual, usa `PublicAsset(path, handler)`.
+- Para servir un directorio completo como fallback, usa `PublicDir(prefix, dir)`.
+- Para servir archivos con permisos, usa `Get(...).Requires(...)`.
+- **PROHIBIDO:** El uso directo de `http.FileServer` o `http.Dir` fuera del sistema de rutas del router. Todo acceso a archivos debe estar declarado y pasar por la verja de seguridad del router.
