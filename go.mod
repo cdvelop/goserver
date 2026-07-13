@@ -7,7 +7,8 @@ require (
 	github.com/tinywasm/devflow v0.4.46
 	github.com/tinywasm/gobuild v0.0.26
 	github.com/tinywasm/gorun v0.0.24
-	github.com/tinywasm/router v0.1.7
+	github.com/tinywasm/model v0.0.12
+	github.com/tinywasm/router v0.1.9
 	golang.org/x/crypto v0.53.0
 )
 
@@ -20,7 +21,6 @@ require (
 	github.com/tinywasm/fmt v0.25.3 // indirect
 	github.com/tinywasm/json v0.5.11 // indirect
 	github.com/tinywasm/mcp v0.1.20 // indirect
-	github.com/tinywasm/model v0.0.12 // indirect
 	github.com/tinywasm/time v0.5.0 // indirect
 	github.com/tinywasm/unixid v0.2.23 // indirect
 	github.com/tinywasm/wizard v0.0.22 // indirect

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
 
@@ -23,7 +24,7 @@ type Config struct {
 	Logger    func(...any)
 
 	Authn          router.Middleware
-	Authorize      func(userID, resource, action string) bool
+	Authorize      model.Authorizer
 	RoutesEndpoint bool
 
 	TLS TLSConfig

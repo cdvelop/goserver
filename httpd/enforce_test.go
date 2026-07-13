@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
 
@@ -12,7 +13,7 @@ func TestRBACMissingAuthorizerFailsAtStartup(t *testing.T) {
 	s := New(cfg)
 
 	// Register a route requiring a resource
-	s.Router().Get("/secret", func(ctx router.Context) {}).Requires("secrets", "read")
+	s.Router().Get("/secret", func(ctx router.Context) {}).Requires(model.Resource("secrets"), model.Read)
 
 	// Call validateRBAC, which is what ListenAndServe calls first
 	err := s.validateRBAC()

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
 
@@ -191,7 +192,7 @@ func TestHTTPRouterRegistration(t *testing.T) {
 	}
 
 	// Test Requires on Route
-	route = route.Requires("users", "read")
+	route = route.Requires(model.Resource("users"), model.Read)
 	if route == nil {
 		t.Fatalf("Requires should return Route")
 	}
@@ -232,9 +233,9 @@ func TestHTTPRouterRoutes(t *testing.T) {
 	r := NewRouter(mux)
 
 	// Register routes with metadata
-	r.Get("/users1", func(ctx router.Context) {}).Requires("users", "read")
-	r.Post("/users2", func(ctx router.Context) {}).Requires("users", "write")
-	r.Delete("/users3", func(ctx router.Context) {}).Requires("users", "delete")
+	r.Get("/users1", func(ctx router.Context) {}).Requires(model.Resource("users"), model.Read)
+	r.Post("/users2", func(ctx router.Context) {}).Requires(model.Resource("users"), model.Update)
+	r.Delete("/users3", func(ctx router.Context) {}).Requires(model.Resource("users"), model.Delete)
 
 	routes := r.Routes()
 	if len(routes) != 3 {
@@ -245,12 +246,12 @@ func TestHTTPRouterRoutes(t *testing.T) {
 	expected := []struct {
 		method   string
 		path     string
-		resource string
-		action   string
+		resource model.Resource
+		action   model.Action
 	}{
-		{http.MethodGet, "/users1", "users", "read"},
-		{http.MethodPost, "/users2", "users", "write"},
-		{http.MethodDelete, "/users3", "users", "delete"},
+		{http.MethodGet, "/users1", model.Resource("users"), model.Read},
+		{http.MethodPost, "/users2", model.Resource("users"), model.Update},
+		{http.MethodDelete, "/users3", model.Resource("users"), model.Delete},
 	}
 
 	for i, exp := range expected {
@@ -463,25 +464,27 @@ func TestHTTPSocketHandler(t *testing.T) {
 
 func TestHTTPRouterComplexScenario(t *testing.T) {
 	srv := New(Config{
-		Authorize: func(u, r, a string) bool { return true },
+		Authorize: func(u string, r model.Resource, a model.Action) bool { return true },
 	})
 	r := srv.Router()
 
 	// Build a realistic API
+	// Note: .Public() overwrites the Requires() access level, as per our implementation.
+	// But in this test we want to verify the routes are registered.
 	r.Get("/api/users", func(ctx router.Context) {
 		ctx.WriteStatus(http.StatusOK)
 		ctx.Write([]byte("[]"))
-	}).Requires("users", "list").Public()
+	}).Public()
 
 	r.Post("/api/users/create", func(ctx router.Context) {
 		ctx.WriteStatus(http.StatusCreated)
 		ctx.Write([]byte(`{"id":1}`))
-	}).Requires("users", "create")
+	}).Requires(model.Resource("users"), model.Create)
 
 	r.Get("/api/users/detail", func(ctx router.Context) {
 		ctx.WriteStatus(http.StatusOK)
 		ctx.Write([]byte(`{"id":1}`))
-	}).Requires("users", "read")
+	}).Requires(model.Resource("users"), model.Read)
 
 	// Verify routes
 	routes := r.Routes()

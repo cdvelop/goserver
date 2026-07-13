@@ -5,14 +5,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
 
 func TestSecurityClosedByDefault(t *testing.T) {
-	srv := New(Config{})
+	srv := New(Config{
+		Authorize: func(u string, r model.Resource, a model.Action) bool { return true },
+	})
 	srv.Router().Get("/private", func(ctx router.Context) {
 		ctx.Write([]byte("ok"))
-	}) // No Public(), no Requires()
+	}).Requires(model.Resource("res"), model.Read) // Explicitly guarded
 
 	handler, _ := srv.Handler()
 
@@ -56,7 +59,7 @@ func TestGlobalIdentityInModule(t *testing.T) {
 	srv.Router().Get("/mcp", func(ctx router.Context) {
 		capturedID = ctx.UserID()
 		ctx.Write([]byte("ok"))
-	}) // No .Requires, but should have identity
+	}).Authenticated() // No resource, just identity
 
 	handler, _ := srv.Handler()
 
@@ -72,7 +75,7 @@ func TestGlobalIdentityInModule(t *testing.T) {
 func TestFailFastOnMissingAuthorize(t *testing.T) {
 	srv := New(Config{})
 	srv.Router().Get("/requires", func(ctx router.Context) {
-	}).Requires("res", "act")
+	}).Requires(model.Resource("res"), model.Read)
 
 	_, err := srv.Handler()
 	if err == nil {

@@ -32,4 +32,5 @@ lo define — y solo ahí.
 - Para servir un archivo individual, usa `PublicAsset(path, handler)`.
 - Para servir un directorio completo como fallback, usa `PublicDir(prefix, dir)`.
 - Para servir archivos con permisos, usa `Get(...).Requires(...)`.
+- El acceso es UNA declaración (`model.Access`), no una combinación de banderas. El zero value es `AccessGuarded`: identidad y permiso. Una contradicción (guarded sin recurso, o recurso sin guarded) falla al arrancar, nunca en runtime. Un `Authorize` nil deniega.
 - **PROHIBIDO:** El uso directo de `http.FileServer` o `http.Dir` fuera del sistema de rutas del router. Todo acceso a archivos debe estar declarado y pasar por la verja de seguridad del router.
