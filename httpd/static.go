@@ -12,11 +12,15 @@ import (
 func (s *Server) wrapWithBatteries(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Create a proxy ResponseWriter to catch 404
-		rec := &statusRecorder{ResponseWriter: w}
+		rec := newStatusRecorder(w)
 
 		handler.ServeHTTP(rec, r)
 
 		if rec.notFound && !rec.wroteHeader {
+			// The 404 we swallowed left its headers behind: drop them before anyone
+			// else writes a response.
+			rec.discardSuppressed()
+
 			// Try dynamic fallbacks from PublicDir routes
 			s.router.mu.RLock()
 			routes := make([]*httpRoute, len(s.router.routes))
@@ -93,10 +97,36 @@ func (s *Server) wrapWithGlobalBatteries(handler http.Handler) http.Handler {
 	})
 }
 
+// statusRecorder swallows a 404 so a PublicDir fallback can answer instead.
+//
+// Swallowing the STATUS is not enough: http.NotFound already wrote its own headers
+// into the shared header map ("Content-Type: text/plain", "X-Content-Type-Options:
+// nosniff") before calling WriteHeader(404). http.ServeFile then honours the
+// Content-Type it finds and never corrects it, so every file in web/public shipped
+// as text/plain — the browser printed index.html as text inside a <pre> and ignored
+// the stylesheet. A suppressed response must leave nothing behind, so the recorder
+// snapshots the headers and restores them when it discards the 404. Deleting the two
+// headers we happen to know about would just move the trap one header along.
 type statusRecorder struct {
 	http.ResponseWriter
 	notFound    bool
 	wroteHeader bool
+	snapshot    http.Header // headers as they were before the wrapped handler ran
+}
+
+func newStatusRecorder(w http.ResponseWriter) *statusRecorder {
+	return &statusRecorder{ResponseWriter: w, snapshot: w.Header().Clone()}
+}
+
+// discardSuppressed undoes every header written by the response we swallowed.
+func (r *statusRecorder) discardSuppressed() {
+	h := r.ResponseWriter.Header()
+	for k := range h {
+		delete(h, k)
+	}
+	for k, v := range r.snapshot {
+		h[k] = v
+	}
 }
 
 func (r *statusRecorder) WriteHeader(status int) {
