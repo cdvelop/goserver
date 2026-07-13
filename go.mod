@@ -4,7 +4,7 @@ go 1.25.2
 
 require (
 	github.com/smallstep/truststore v0.13.0
-	github.com/tinywasm/devflow v0.4.45
+	github.com/tinywasm/devflow v0.4.46
 	github.com/tinywasm/gobuild v0.0.26
 	github.com/tinywasm/gorun v0.0.24
 	github.com/tinywasm/router v0.1.7
