@@ -7,7 +7,7 @@ require (
 	github.com/tinywasm/devflow v0.4.46
 	github.com/tinywasm/gobuild v0.0.26
 	github.com/tinywasm/gorun v0.0.24
-	github.com/tinywasm/router v0.1.7
+	github.com/tinywasm/router v0.1.9
 	golang.org/x/crypto v0.53.0
 )
 

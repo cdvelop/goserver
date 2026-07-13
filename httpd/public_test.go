@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
 
@@ -18,6 +19,7 @@ func TestPublicAssetsAndDir(t *testing.T) {
 
 	s := New(Config{
 		PublicDir: publicDir,
+		Authorize: func(u string, r model.Resource, a model.Action) bool { return false },
 	})
 
 	r := s.Router()
@@ -29,7 +31,7 @@ func TestPublicAssetsAndDir(t *testing.T) {
 	}).Public()
 	r.Get("/private", func(ctx router.Context) {
 		ctx.Write([]byte("secret"))
-	})
+	}).Requires(model.Resource("private"), model.Read)
 
 	handler, err := s.Handler()
 	if err != nil {
@@ -41,10 +43,10 @@ func TestPublicAssetsAndDir(t *testing.T) {
 	foundDir := false
 	foundAsset := false
 	for _, info := range routes {
-		if info.Path == "/" && info.Dir == publicDir && info.Public {
+		if info.Path == "/" && info.Dir == publicDir && info.Access == model.AccessPublic {
 			foundDir = true
 		}
-		if info.Path == "/asset.js" && info.Public {
+		if info.Path == "/asset.js" && info.Access == model.AccessPublic {
 			foundAsset = true
 		}
 	}

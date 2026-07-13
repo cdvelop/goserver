@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
 
@@ -148,7 +149,7 @@ type httpRouter struct {
 
 	// Authorizer info to be used by enforced RBAC
 	authn      router.Middleware
-	authorizer func(userID, resource, action string) bool
+	authorizer model.Authorizer
 }
 
 type httpRoute struct {
@@ -158,14 +159,20 @@ type httpRoute struct {
 	mwAppliedH router.HandlerFunc
 }
 
-func (r *httpRoute) Requires(resource string, action string) router.Route {
+func (r *httpRoute) Requires(resource model.Resource, action model.Action) router.Route {
 	r.info.Resource = resource
 	r.info.Action = action
+	r.info.Access = model.AccessGuarded
+	return r
+}
+
+func (r *httpRoute) Authenticated() router.Route {
+	r.info.Access = model.AccessAuthenticated
 	return r
 }
 
 func (r *httpRoute) Public() router.Route {
-	r.info.Public = true
+	r.info.Access = model.AccessPublic
 	return r
 }
 
@@ -187,7 +194,7 @@ func (r *httpRouter) useGlobal(m ...router.Middleware) {
 	r.globalMiddlewares = append(r.globalMiddlewares, m...)
 }
 
-func (r *httpRouter) setAuthorizer(authn router.Middleware, authorizer func(string, string, string) bool) {
+func (r *httpRouter) setAuthorizer(authn router.Middleware, authorizer model.Authorizer) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.authn = authn
@@ -279,8 +286,12 @@ func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
 
 func (r *httpRouter) PublicAsset(path string, h router.HandlerFunc) {
 	route := &httpRoute{
-		info: router.RouteInfo{Method: http.MethodGet, Path: path, Public: true},
-		h:    h,
+		info: router.RouteInfo{
+			Method: http.MethodGet,
+			Path:   path,
+			Access: model.AccessPublic,
+		},
+		h: h,
 	}
 	r.mu.Lock()
 	r.routes = append(r.routes, route)
@@ -297,7 +308,7 @@ func (r *httpRouter) PublicDir(prefix string, dir string) {
 		info: router.RouteInfo{
 			Method: http.MethodGet,
 			Path:   prefix,
-			Public: true,
+			Access: model.AccessPublic,
 			Dir:    dir,
 		},
 	}
@@ -326,37 +337,32 @@ func (r *httpRouter) applySecurityAndMiddleware(h router.HandlerFunc, route *htt
 		next = func(ctx router.Context) {}
 	}
 	wrapped = func(ctx router.Context) {
-		// Public routes: always allowed
-		if route.info.Public {
+		switch route.info.Access {
+		case model.AccessPublic:
 			next(ctx)
-			return
-		}
 
-		// Private by default: if it's not Public() and no permission, deny.
-		// Requires explicitly called:
-		if route.info.Resource != "" {
-			if authorizer == nil {
-				ctx.WriteStatus(http.StatusInternalServerError)
-				ctx.Write([]byte("Authorizer not configured"))
-				return
-			}
-			if !authorizer(ctx.UserID(), route.info.Resource, route.info.Action) {
+		case model.AccessAuthenticated:
+			if ctx.UserID() == "" {
 				ctx.WriteStatus(http.StatusForbidden)
 				ctx.Write([]byte("Forbidden\n"))
 				return
 			}
 			next(ctx)
-			return
-		}
 
-		// If neither Public() nor Requires() is set, it's a private route.
-		// Anonymous users (empty UserID) are forbidden by default.
-		if ctx.UserID() == "" {
-			ctx.WriteStatus(http.StatusForbidden)
-			ctx.Write([]byte("Forbidden\n"))
-			return
+		default: // model.AccessGuarded — el zero value: identidad Y permiso
+			if ctx.UserID() == "" {
+				ctx.WriteStatus(http.StatusForbidden)
+				ctx.Write([]byte("Forbidden\n"))
+				return
+			}
+			// model.Allowed deniega si Authorize es nil: la ausencia de respuesta no es permiso.
+			if !model.Allowed(authorizer, ctx.UserID(), route.info.Resource, route.info.Action) {
+				ctx.WriteStatus(http.StatusForbidden)
+				ctx.Write([]byte("Forbidden\n"))
+				return
+			}
+			next(ctx)
 		}
-		next(ctx)
 	}
 
 	// 2. Apply local middlewares

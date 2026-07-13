@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
 
@@ -39,7 +40,7 @@ func TestConcurrentRequests_NoRace(t *testing.T) {
 				next(ctx)
 			}
 		},
-		Authorize: func(userID, resource, action string) bool {
+		Authorize: func(userID string, resource model.Resource, action model.Action) bool {
 			return userID == "admin"
 		},
 	}
@@ -50,7 +51,7 @@ func TestConcurrentRequests_NoRace(t *testing.T) {
 	}).Public()
 	s.Router().Get("/api/secret", func(ctx router.Context) {
 		ctx.Write([]byte("secret"))
-	}).Requires("top", "secret")
+	}).Requires(model.Resource("top"), model.Read)
 
 	go func() {
 		s.ListenAndServe()
@@ -156,7 +157,7 @@ func TestConcurrentAuthorizerCalls(t *testing.T) {
 				next(ctx)
 			}
 		},
-		Authorize: func(userID, resource, action string) bool {
+		Authorize: func(userID string, resource model.Resource, action model.Action) bool {
 			// Simulate some work or shared state access
 			return userID == "admin"
 		},
@@ -165,7 +166,7 @@ func TestConcurrentAuthorizerCalls(t *testing.T) {
 
 	s.Router().Get("/secret", func(ctx router.Context) {
 		ctx.Write([]byte("ok"))
-	}).Requires("res", "act")
+	}).Requires(model.Resource("res"), model.Read)
 
 	go func() {
 		s.ListenAndServe()

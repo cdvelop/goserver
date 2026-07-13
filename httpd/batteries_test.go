@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
 
@@ -30,12 +31,12 @@ func TestHTTPDBatteries(t *testing.T) {
 	// Register a route
 	s.Router().Get("/api/hello", func(ctx router.Context) {
 		ctx.Write([]byte("hi"))
-	})
+	}).Public()
 
 	// Add RBAC
 	s.Router().Get("/api/secret", func(ctx router.Context) {
 		ctx.Write([]byte("secret"))
-	}).Requires("admin", "read")
+	}).Requires(model.Resource("admin"), model.Read)
 
 	s.config.Authn = func(next router.HandlerFunc) router.HandlerFunc {
 		return func(ctx router.Context) {
@@ -43,7 +44,7 @@ func TestHTTPDBatteries(t *testing.T) {
 			next(ctx)
 		}
 	}
-	s.config.Authorize = func(userID, resource, action string) bool {
+	s.config.Authorize = func(userID string, resource model.Resource, action model.Action) bool {
 		return userID == "admin"
 	}
 
