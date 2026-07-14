@@ -1,7 +1,6 @@
 package httpd
 
 import (
-	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -106,9 +105,18 @@ func TestHTTPDBatteries(t *testing.T) {
 	if w.Code != 200 {
 		t.Errorf("Routes endpoint failed: %d", w.Code)
 	}
-	var routes []router.RouteInfo
-	json.Unmarshal(w.Body.Bytes(), &routes)
-	if len(routes) < 2 {
-		t.Errorf("Expected at least 2 routes, got %d", len(routes))
+	// The posture must be READABLE. This endpoint exists so an operator can see what is
+	// exposed, and it used to lie: Access is a numeric type whose ZERO value is
+	// AccessGuarded, so the most protected route serialized as `"Access":0` — which reads
+	// as "nothing declared", the opposite of the truth. Assert the words, not the count:
+	// the old test decoded into a struct and swallowed the error, so it never saw this.
+	body := w.Body.String()
+	for _, want := range []string{`"access":"guarded"`, `"access":"public"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("routes endpoint does not report %s\nbody: %s", want, body)
+		}
+	}
+	if strings.Contains(body, `"access":0`) || strings.Contains(body, `"Access":0`) {
+		t.Errorf("the most protected route is reported as 0, which reads as 'unset'\nbody: %s", body)
 	}
 }
