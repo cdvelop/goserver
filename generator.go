@@ -8,7 +8,7 @@ import (
 	"path"
 	"text/template"
 
-	"github.com/tinywasm/devflow"
+	"github.com/tinywasm/markdown"
 )
 
 //go:embed templates/*
@@ -44,9 +44,9 @@ func (h *ServerHandler) getExpectedServerContent() (string, error) {
 		return nil
 	}
 
-	// use temporary NewMarkDown to extract code from processed template
+	// use a temporary markdown Doc to extract code from the processed template
 	// use "." as dummy destination as captureWriter handles the content
-	m := devflow.NewMarkDown("", ".", captureWriter).
+	m := markdown.New("", ".", captureWriter).
 		InputByte([]byte(processed))
 
 	if err := m.Extract(h.mainFileExternalServer); err != nil {

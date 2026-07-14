@@ -211,13 +211,22 @@ func (r *httpRouter) Handle(method, path string, h router.HandlerFunc) router.Ro
 	return route
 }
 
-func (r *httpRouter) register(route *httpRoute) {
-	r.mux.HandleFunc(route.info.Path, func(w http.ResponseWriter, req *http.Request) {
-		if route.info.Method != "" && req.Method != route.info.Method {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
+// pattern builds the ServeMux pattern for a route. The method MUST be part of it: registering
+// by path alone makes two routes on the same path the SAME pattern, and ServeMux panics on the
+// duplicate. That is not a corner case — it is what the router contract offers on every path
+// (Get/Post/Options), and it panicked here while working fine on the edge implementation.
+//
+// ServeMux matches "GET /path" natively since Go 1.22, so it also emits the 405 itself. An
+// empty method means "any method" and stays a bare path pattern; the contract allows it.
+func pattern(info router.RouteInfo) string {
+	if info.Method == "" {
+		return info.Path
+	}
+	return info.Method + " " + info.Path
+}
 
+func (r *httpRouter) register(route *httpRoute) {
+	r.mux.HandleFunc(pattern(route.info), func(w http.ResponseWriter, req *http.Request) {
 		hctx := &httpContext{w: w, r: req}
 		r.mu.RLock()
 		if route.mwAppliedH == nil {
@@ -330,12 +339,22 @@ func (r *httpRouter) applySecurityAndMiddleware(h router.HandlerFunc, route *htt
 	gmws := r.globalMiddlewares
 
 	wrapped := h
-
-	// 1. Apply RBAC (innermost)
-	next := wrapped
-	if next == nil {
-		next = func(ctx router.Context) {}
+	if wrapped == nil {
+		wrapped = func(ctx router.Context) {}
 	}
+
+	// 1. The consumer's middleware wraps the handler — BEHIND the gate (step 2). A rejected
+	//    request must execute none of it: a Use that decodes the body or hits the DB would
+	//    otherwise do that work for a caller who is about to get a 403. The gate is a gate.
+	//
+	//    The library's own batteries (log, gzip) are NOT here — they are globalMiddlewares,
+	//    applied in step 3, outside the gate, so a rejection is still logged.
+	for i := 0; i < len(mws); i++ {
+		wrapped = mws[i](wrapped)
+	}
+
+	// 2. Apply RBAC around them.
+	next := wrapped
 	wrapped = func(ctx router.Context) {
 		switch route.info.Access {
 		case model.AccessPublic:
@@ -365,16 +384,14 @@ func (r *httpRouter) applySecurityAndMiddleware(h router.HandlerFunc, route *htt
 		}
 	}
 
-	// 2. Apply local middlewares
-	for i := 0; i < len(mws); i++ {
-		wrapped = mws[i](wrapped)
-	}
-	// 3. Apply global middlewares
+	// 3. The library's batteries (log, gzip, no-cache) sit OUTSIDE the gate on purpose: a
+	//    rejected request must still be logged and compressed. They are the seam for anything
+	//    that legitimately needs to observe a 403.
 	for i := 0; i < len(gmws); i++ {
 		wrapped = gmws[i](wrapped)
 	}
 
-	// 4. Apply Authn middleware (if any)
+	// 4. Authn is the outermost: identity must exist BEFORE the gate decides with it.
 	if authn != nil {
 		wrapped = authn(wrapped)
 	}
@@ -388,7 +405,7 @@ func (r *httpRouter) Socket(path string, h router.SocketFunc) router.Route {
 	r.routes = append(r.routes, route)
 	r.mu.Unlock()
 
-	r.mux.HandleFunc(path, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc(pattern(route.info), func(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "WebSocket not implemented in native adapter", http.StatusNotImplemented)
 	})
 	return route
