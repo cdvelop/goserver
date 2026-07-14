@@ -73,7 +73,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	s.router.mux = s.mux
 
 	if s.config.Health {
-		s.mux.HandleFunc(HealthPath, func(w http.ResponseWriter, r *http.Request) {
+		s.mux.HandleFunc(pattern(router.RouteInfo{Method: http.MethodGet, Path: HealthPath}), func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("ok"))
 		})

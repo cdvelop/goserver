@@ -3,6 +3,8 @@ package httpd
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/tinywasm/router"
 )
 
 func (s *Server) registerRoutesEndpoint() {
@@ -10,12 +12,7 @@ func (s *Server) registerRoutesEndpoint() {
 		return
 	}
 
-	s.mux.HandleFunc(RoutesPath, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
+	s.mux.HandleFunc(pattern(router.RouteInfo{Method: http.MethodGet, Path: RoutesPath}), func(w http.ResponseWriter, r *http.Request) {
 		routes := s.router.Routes()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(routes)
