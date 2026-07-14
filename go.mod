@@ -8,7 +8,7 @@ require (
 	github.com/tinywasm/gorun v0.0.24
 	github.com/tinywasm/json v0.5.11
 	github.com/tinywasm/markdown v0.0.2
-	github.com/tinywasm/model v0.0.13
+	github.com/tinywasm/model v0.0.14
 	github.com/tinywasm/router v0.1.11
 	golang.org/x/crypto v0.53.0
 )
