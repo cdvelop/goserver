@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/tinywasm/json"
 	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 )
@@ -57,6 +58,19 @@ func (c *httpContext) WriteStatus(code int) {
 
 func (c *httpContext) Write(b []byte) (int, error) {
 	return c.w.Write(b)
+}
+
+func (c *httpContext) Decode(into model.Decodable) error {
+	return json.Decode(c.Body(), into)
+}
+
+func (c *httpContext) Encode(v model.Encodable) error {
+	var out []byte
+	if err := json.Encode(v, &out); err != nil {
+		return err
+	}
+	_, err := c.Write(out)
+	return err
 }
 
 func (c *httpContext) SetValue(key string, v any) {
@@ -173,6 +187,11 @@ func (r *httpRoute) Authenticated() router.Route {
 
 func (r *httpRoute) Public() router.Route {
 	r.info.Access = model.AccessPublic
+	return r
+}
+
+func (r *httpRoute) Accepts(args model.Fielder) router.Route {
+	r.info.Args = args
 	return r
 }
 
