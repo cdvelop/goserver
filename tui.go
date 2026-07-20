@@ -1,12 +1,16 @@
 package server
 
+const (
+	LabelServerRun = "Server Run"
+)
+
 func (h *ServerHandler) Name() string {
 	return "SERVER"
 }
 
 // Label implements HandlerSelection.Label
 func (h *ServerHandler) Label() string {
-	return "Execution"
+	return "Server Run"
 }
 
 // Value implements HandlerSelection.Value

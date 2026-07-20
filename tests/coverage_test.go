@@ -1,11 +1,11 @@
 package server_test
 
 import (
+	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
-	"os"
-	"sync"
 
 	"github.com/tinywasm/server"
 )
@@ -25,7 +25,7 @@ func TestServerHandler_Getters(t *testing.T) {
 	tmp := t.TempDir()
 	h := newTestHandler(t, "src", "out", tmp)
 
-	if label := h.Label(); label != "Execution" {
+	if label := h.Label(); label != server.LabelServerRun {
 		t.Errorf("expected Label 'Execution', got '%s'", label)
 	}
 
