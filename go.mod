@@ -8,13 +8,13 @@ require (
 	github.com/tinywasm/gorun v0.0.24
 	github.com/tinywasm/json v0.5.11
 	github.com/tinywasm/markdown v0.0.2
-	github.com/tinywasm/model v0.1.0
+	github.com/tinywasm/model v0.1.3
 	github.com/tinywasm/router v0.1.14
 	golang.org/x/crypto v0.53.0
 )
 
 require (
-	github.com/tinywasm/fmt v0.25.3 // indirect
+	github.com/tinywasm/fmt v0.25.5 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	howett.net/plist v1.0.0 // indirect
