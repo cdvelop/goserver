@@ -39,9 +39,8 @@ type UI interface {
 }
 
 const (
-	StoreKeyExternalServer = "server_external_mode"
-	EnvKeyServerPort       = "SERVER_PORT"
-	EnvKeyServerHttps      = "SERVER_HTTPS"
+	EnvKeyServerPort  = "SERVER_PORT"
+	EnvKeyServerHttps = "SERVER_HTTPS"
 
 	execModeInternal = "internal"
 	execModeExternal = "external"
@@ -218,8 +217,9 @@ func (h *ServerHandler) SetUI(ui UI) *ServerHandler {
 // the error is logged.
 //
 // Idempotency: the hook fires on every external-mode StartServer, not only
-// on the internal→external transition (external mode is sticky, persisted
-// via the Store). Implementations must be safe to invoke N times.
+// on the internal→external transition (external mode is sticky: once the
+// server file decides it, StartServer keeps the external strategy).
+// Implementations must be safe to invoke N times.
 //
 // RestartServer does NOT invoke this hook.
 func (h *ServerHandler) SetBeforeExternalServerStart(fn func() error) *ServerHandler {
@@ -311,7 +311,6 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 			h.strategy = newExternalStrategy(h)
 
 			go h.strategy.Start(nil)
-			_ = h.Store.Set(StoreKeyExternalServer, "true")
 		}
 	} else {
 		if !h.executionInternal {
