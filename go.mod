@@ -14,7 +14,7 @@ require (
 )
 
 require (
-	github.com/tinywasm/fmt v0.25.5 // indirect
+	github.com/tinywasm/fmt v0.25.6 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	howett.net/plist v1.0.0 // indirect
