@@ -4,7 +4,7 @@ go 1.25.2
 
 require (
 	github.com/smallstep/truststore v0.13.0
-	github.com/tinywasm/gobuild v0.0.26
+	github.com/tinywasm/gobuild v0.0.27
 	github.com/tinywasm/gorun v0.0.24
 	github.com/tinywasm/json v0.5.17
 	github.com/tinywasm/markdown v0.0.2
