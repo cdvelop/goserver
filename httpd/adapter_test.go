@@ -547,14 +547,14 @@ func TestHTTPContextContextValue(t *testing.T) {
 		t.Fatalf("SetValue/Value mismatch")
 	}
 
-	// SetValue with different types
-	ctx.SetValue("number", 42)
-	if ctx.Value("number") != 42 {
-		t.Fatalf("SetValue with number type mismatch")
+	// SetValue with a second key
+	ctx.SetValue("number", "42")
+	if ctx.Value("number") != "42" {
+		t.Fatalf("SetValue with a second key mismatch")
 	}
 
-	// Unset key should return nil from our map
-	if ctx.Value("notset") != nil {
-		t.Fatalf("Unset key should return nil from map")
+	// Unset key should return "" from our map
+	if ctx.Value("notset") != "" {
+		t.Fatalf("Unset key should return \"\" from map")
 	}
 }

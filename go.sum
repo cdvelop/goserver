@@ -13,8 +13,8 @@ github.com/tinywasm/markdown v0.0.2 h1:dSt9UQPeZgaaPE30gjGYhh/UBxMKGJN+yJyUUz/Bg
 github.com/tinywasm/markdown v0.0.2/go.mod h1:0SAcxF8xzuudJ3DrYl3mDISgwQmYzXeR7al0cLjZP1M=
 github.com/tinywasm/model v0.1.4 h1:ZXz/LB9bUVzfiPO3R8iMDbZ6j2DCdR+rOV67zDaE7VE=
 github.com/tinywasm/model v0.1.4/go.mod h1:Cx/RTzSOH/DM2DtP6JqdhIRTDlf31EstTV5Y0RSp/dg=
-github.com/tinywasm/router v0.1.27 h1:aIwLfci36AOikG0B+sPx7QnfuMk7kx4EkFnS0hYEr8E=
-github.com/tinywasm/router v0.1.27/go.mod h1:xbZGl0JN2BT4KPYCjsIHlCmzIWOH42AYrk9FpuH/13k=
+github.com/tinywasm/router v0.1.28 h1:r6aYg37En0OPY2IUxgRPV4jRiHxEDaR77Y3y7K/OZ1g=
+github.com/tinywasm/router v0.1.28/go.mod h1:xbZGl0JN2BT4KPYCjsIHlCmzIWOH42AYrk9FpuH/13k=
 golang.org/x/crypto v0.53.0 h1:QZ4Muo8THX6CizN2vPPd5fBGHyogrdK9fG4wLPFUsto=
 golang.org/x/crypto v0.53.0/go.mod h1:DNLU434OwVakk9PzuwV8w62mAJpRJL3vsgcfp4Qnsio=
 golang.org/x/net v0.55.0 h1:bcvxaJn3e1U6InsFWt1JUq1aSjnRxLzT2rtD2KfkDF8=

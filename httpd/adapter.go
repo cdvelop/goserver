@@ -23,7 +23,7 @@ type httpContext struct {
 	r      *http.Request
 	body   []byte
 	once   sync.Once
-	values map[string]any
+	values map[string]string
 	userID string
 }
 
@@ -73,18 +73,21 @@ func (c *httpContext) Encode(v model.Encodable) error {
 	return err
 }
 
-func (c *httpContext) SetValue(key string, v any) {
+func (c *httpContext) SetValue(key, value string) {
 	if c.values == nil {
-		c.values = make(map[string]any)
+		c.values = make(map[string]string)
 	}
-	c.values[key] = v
+	c.values[key] = value
 }
 
-func (c *httpContext) Value(key string) any {
+func (c *httpContext) Value(key string) string {
 	if v, ok := c.values[key]; ok {
 		return v
 	}
-	return c.r.Context().Value(key)
+	if v, ok := c.r.Context().Value(key).(string); ok {
+		return v
+	}
+	return ""
 }
 
 func (c *httpContext) SetUserID(id string) {
