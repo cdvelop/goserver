@@ -35,6 +35,15 @@ func (c *httpContext) Path() string {
 	return c.r.URL.Path
 }
 
+// Param returns a path parameter the matched route declared with {name}.
+//
+// ServeMux extracts it: the route was registered as "GET /api/items/{id}",
+// which the standard library has matched and populated since Go 1.22. This
+// repo does not parse patterns — see docs/ARCHITECTURE.md.
+func (c *httpContext) Param(name string) string {
+	return c.r.PathValue(name)
+}
+
 func (c *httpContext) Body() []byte {
 	c.once.Do(func() {
 		if c.r.Body != nil {
@@ -224,6 +233,13 @@ func (r *httpRouter) setAuthorizer(authn router.Middleware, authorizer model.Aut
 }
 
 func (r *httpRouter) Handle(method, path string, h router.HandlerFunc) router.Route {
+	// Pattern validation: this server delegates pattern matching to net/http.ServeMux,
+	// but uses router.ValidatePattern at registration so patterns rejected by edge runtimes
+	// (e.g. {name...} trailing wildcards) are rejected early here as well.
+	if err := router.ValidatePattern(path); err != nil {
+		panic(err.Error())
+	}
+
 	route := &httpRoute{info: router.RouteInfo{Method: method, Path: path}, h: h}
 	r.mu.Lock()
 	r.routes = append(r.routes, route)
@@ -306,6 +322,10 @@ func (r *httpRouter) Options(path string, h router.HandlerFunc) router.Route {
 }
 
 func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
+	if err := router.ValidatePattern(path); err != nil {
+		panic(err.Error())
+	}
+
 	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}, sh: h}
 	r.mu.Lock()
 	r.routes = append(r.routes, route)
@@ -316,6 +336,10 @@ func (r *httpRouter) Stream(path string, h router.StreamFunc) router.Route {
 }
 
 func (r *httpRouter) PublicAsset(path string, h router.HandlerFunc) {
+	if err := router.ValidatePattern(path); err != nil {
+		panic(err.Error())
+	}
+
 	route := &httpRoute{
 		info: router.RouteInfo{
 			Method: http.MethodGet,
@@ -333,6 +357,9 @@ func (r *httpRouter) PublicAsset(path string, h router.HandlerFunc) {
 func (r *httpRouter) PublicDir(prefix string, dir string) {
 	if !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
+	}
+	if err := router.ValidatePattern(prefix); err != nil {
+		panic(err.Error())
 	}
 
 	route := &httpRoute{
@@ -422,6 +449,10 @@ func (r *httpRouter) applySecurityAndMiddleware(h router.HandlerFunc, route *htt
 }
 
 func (r *httpRouter) Socket(path string, h router.SocketFunc) router.Route {
+	if err := router.ValidatePattern(path); err != nil {
+		panic(err.Error())
+	}
+
 	route := &httpRoute{info: router.RouteInfo{Method: http.MethodGet, Path: path}}
 	r.mu.Lock()
 	r.routes = append(r.routes, route)

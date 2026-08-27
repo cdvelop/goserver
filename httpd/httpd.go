@@ -12,7 +12,6 @@ const (
 	DefaultPort      = "8080"
 	DefaultPublicDir = "public"
 	HealthPath       = "/health"
-	RoutesPath       = "/_routes"
 )
 
 type Config struct {
@@ -27,13 +26,25 @@ type Config struct {
 	Authorize      model.Authorizer
 	RoutesEndpoint bool
 
+	// Policy lets the introspection endpoint report WHICH roles hold the
+	// permission each route requires. Optional: nil leaves those columns
+	// marked unknown, which is not the same as "nobody" — a permission no
+	// role holds turns a correctly-declared route into a permanent 403, and
+	// that finding must never be confused with "the app did not say".
+	//
+	// It is separate from Authorize because the two answer opposite
+	// questions: Authorize answers "may this user do this?", Policy answers
+	// "who may do this?". A closure cannot answer the second.
+	Policy model.PolicyDescriber
+
 	TLS TLSConfig
 }
 
 type Server struct {
-	config Config
-	mux    *http.ServeMux
-	router *httpRouter
+	config                Config
+	mux                   *http.ServeMux
+	router                *httpRouter
+	routesEndpointMounted bool
 }
 
 func applyDefaults(c Config) Config {
@@ -69,6 +80,8 @@ func (s *Server) Mount(m ...router.APIModule) *Server {
 }
 
 func (s *Server) Handler() (http.Handler, error) {
+	s.registerRoutesEndpoint()
+
 	s.mux = http.NewServeMux()
 	s.router.mux = s.mux
 
@@ -78,8 +91,6 @@ func (s *Server) Handler() (http.Handler, error) {
 			w.Write([]byte("ok"))
 		})
 	}
-
-	s.registerRoutesEndpoint()
 
 	// Re-register all existing routes in the new mux
 	s.router.mu.RLock()

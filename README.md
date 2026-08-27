@@ -70,7 +70,11 @@ func main() {
     handler.RegisterRoutes(func(r router.Router) {
         r.Get("/hello", func(ctx router.Context) {
             fmt.Fprint(ctx, "Hello from Internal Server!")
-        })
+        }).Public()
+
+        r.Get("/api/items/{id}", func(ctx router.Context) {
+            fmt.Fprintf(ctx, "Item ID: %s", ctx.Param("id"))
+        }).Public()
     })
 
     var wg sync.WaitGroup
@@ -89,8 +93,9 @@ func main() {
 `net/http`, with production batteries built in: gzip, no-cache headers, static file
 serving, TLS (AutoCert/custom cert/DevTLS), a `/health` endpoint, an optional `/_routes`
 JSON listing, and closed-by-default RBAC enforcement (`Config.Authn` for global identity,
-`Config.Authorize` for per-route `Requires(resource, action)` checks; routes must opt into
-`Public()` to allow anonymous access).
+`Config.Authorize` for per-route `Requires(resource, action)` checks, and `Config.Policy`
+to report which roles hold each route's required permission; `Authorize` answers "may this user do this?",
+while `Policy` answers "who may do this?"; routes must opt into `Public()` to allow anonymous access).
 
 ```go
 s := httpd.New(httpd.Config{
