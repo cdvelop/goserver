@@ -2,6 +2,8 @@
 PLAN: "feat: path parameters in httpd, and one shared introspection endpoint"
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 7235600109958421322
 ---
 
 > This plan is dispatched via the CodeJob workflow. See skill: agents-workflow.
