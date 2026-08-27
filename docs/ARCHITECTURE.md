@@ -20,6 +20,12 @@ When a project lacks a custom `web/server.go` or switches to external mode witho
 - **`routes_endpoint.go`**: Optional JSON endpoint at `/_routes` listing all registered routes.
 - **`httpd.go`**: Core `Server` orchestrator.
 
+## Pattern Handling and Introspection Delegations
+
+1. **Pattern Matching & Extraction**: Delegated to `net/http.ServeMux`. Routes registered as `"GET /api/items/{id}"` natively match parameters in Go 1.22+, accessible via `ctx.Param(name)`.
+2. **Pattern Validation**: Delegated to `tinywasm/router` via `router.ValidatePattern`. This server rejects patterns with wildcards (e.g., `{name...}`) at registration time so that patterns unsupported by edge runtimes fail early on the dev server.
+3. **Introspection Endpoint**: Delegated to `router.MountIntrospection` at `router.IntrospectionPath` (`/_routes`). This repo supplies the `Config.RoutesEndpoint` boolean toggle and the `Config.Policy` describer.
+
 ## Design Goals
 
 1. **Simple Entry Point**: `httpd.New(config).Mount(modules).ListenAndServe()` is the only way to start the server.

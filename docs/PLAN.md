@@ -2,8 +2,9 @@
 PLAN: "feat: path parameters in httpd, and one shared introspection endpoint"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 7235600109958421322
+PR: https://github.com/tinywasm/server/pull/16
 ---
 
 > This plan is dispatched via the CodeJob workflow. See skill: agents-workflow.
