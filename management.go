@@ -1,17 +1,13 @@
 package server
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
-)
 
-const (
-	logModeExternalFound  = "Modo externo: encontrado %s"
-	logModeInternalNoFile = "Modo interno: no existe %s — se sirve desde memoria"
+	"github.com/tinywasm/fmt/lang"
 )
 
 // StartServer initiates the server using the current strategy (In-Memory or External)
@@ -24,9 +20,9 @@ func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
 			h.executionInternal = false
 			h.strategy = newExternalStrategy(h)
 		}
-		h.log(fmt.Sprintf(logModeExternalFound, serverFilePath))
+		h.log(lang.Translate("External", "mode:", "found", serverFilePath).String())
 	} else {
-		h.log(fmt.Sprintf(logModeInternalNoFile, serverFilePath))
+		h.log(lang.Translate("Internal", "mode:", serverFilePath, "does", "not", "exist", "—", "served", "from", "memory").String())
 	}
 	isInternal := h.executionInternal
 	strategy := h.strategy

@@ -131,8 +131,8 @@ func TestLaDecisionSeRegistraConLaRutaCompleta(t *testing.T) {
 		withFile   bool
 		wantSubstr string
 	}{
-		{"existe", true, "Modo externo: encontrado"},
-		{"no existe", false, "Modo interno: no existe"},
+		{"existe", true, "External mode: found"},
+		{"no existe", false, "Internal mode:"},
 	}
 
 	for _, tt := range tests {
