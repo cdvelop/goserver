@@ -1,7 +1,7 @@
 package httpd
 
 import (
-	"github.com/tinywasm/router"
+	"webtyp.com/router"
 )
 
 // RoutesPath is where this server exposes its route table. It is

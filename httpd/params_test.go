@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/tinywasm/router"
+	"webtyp.com/router"
 )
 
 func TestParamFromServeMux(t *testing.T) {

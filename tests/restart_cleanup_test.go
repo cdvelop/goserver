@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 // TestRestartCleanup tests that RestartServer properly cleans up processes

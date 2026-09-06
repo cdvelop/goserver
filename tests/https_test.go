@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 func TestWaitForPortListening_HTTPS(t *testing.T) {

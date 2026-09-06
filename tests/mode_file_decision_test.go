@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 type recordingStore struct {

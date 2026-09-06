@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tinywasm/router"
-	"github.com/tinywasm/router/conformance"
+	"webtyp.com/router"
+	"webtyp.com/router/conformance"
 )
 
 // conformanceUserHeader is this adapter's authentication seam for the suite: the header the

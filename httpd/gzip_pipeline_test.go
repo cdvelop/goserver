@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/tinywasm/router"
+	"webtyp.com/router"
 )
 
 // TestServerPipelineDoesNotDoubleEncode ejercita el Server COMPLETO, no el middleware
@@ -18,7 +18,7 @@ import (
 //	CompileError: WebAssembly.instantiateStreaming():
 //	expected magic word 00 61 73 6d, found 1f 8b 08 00
 //
-// El handler imita a tinywasm/client: comprime el wasm él mismo y lo declara.
+// El handler imita a webtyp/client: comprime el wasm él mismo y lo declara.
 // La batería Gzip del servidor no debe volver a comprimirlo encima.
 func TestServerPipelineDoesNotDoubleEncode(t *testing.T) {
 	wasm := append([]byte{0x00, 0x61, 0x73, 0x6d}, []byte("cuerpo del modulo")...)

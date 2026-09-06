@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 // Integration test: black-box verification that StartServer generates the external

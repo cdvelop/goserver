@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/tinywasm/router"
+	"webtyp.com/router"
 )
 
 // wasmMagic: los 4 bytes con los que empieza todo binario WebAssembly.
@@ -23,7 +23,7 @@ var wasmMagic = []byte{0x00, 0x61, 0x73, 0x6d}
 //
 // (1f 8b 08 00 es la firma de gzip: debajo de una capa había otra.)
 //
-// Causa: `tinywasm/client` comprime el wasm por su cuenta y declara
+// Causa: `webtyp/client` comprime el wasm por su cuenta y declara
 // Content-Encoding: gzip; la batería Gzip del servidor lo envolvía y volvía a
 // comprimirlo encima. El navegador descomprime UNA capa y encuentra gzip.
 //

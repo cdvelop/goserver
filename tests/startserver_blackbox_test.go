@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 // This test verifies that calling CreateTemplateServer generates the external server file

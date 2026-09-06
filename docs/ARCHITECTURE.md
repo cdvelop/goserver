@@ -1,6 +1,6 @@
-# Architecture — `tinywasm/server/httpd`
+# Architecture — `webtyp/server/httpd`
 
-The `httpd` subpackage provides a high-level, "batteries-included" HTTP server implementation that implements the `github.com/tinywasm/router` contract.
+The `httpd` subpackage provides a high-level, "batteries-included" HTTP server implementation that implements the `webtyp.com/router` contract.
 
 ## Relationship with `internalStrategy`
 
@@ -23,7 +23,7 @@ When a project lacks a custom `web/server.go` or switches to external mode witho
 ## Pattern Handling and Introspection Delegations
 
 1. **Pattern Matching & Extraction**: Delegated to `net/http.ServeMux`. Routes registered as `"GET /api/items/{id}"` natively match parameters in Go 1.22+, accessible via `ctx.Param(name)`.
-2. **Pattern Validation**: Delegated to `tinywasm/router` via `router.ValidatePattern`. This server rejects patterns with wildcards (e.g., `{name...}`) at registration time so that patterns unsupported by edge runtimes fail early on the dev server.
+2. **Pattern Validation**: Delegated to `webtyp/router` via `router.ValidatePattern`. This server rejects patterns with wildcards (e.g., `{name...}`) at registration time so that patterns unsupported by edge runtimes fail early on the dev server.
 3. **Introspection Endpoint**: Delegated to `router.MountIntrospection` at `router.IntrospectionPath` (`/_routes`). This repo supplies the `Config.RoutesEndpoint` boolean toggle and the `Config.Policy` describer.
 
 ## Design Goals

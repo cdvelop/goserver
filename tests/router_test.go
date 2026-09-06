@@ -9,8 +9,8 @@ import (
 
 	"strings"
 
-	"github.com/tinywasm/router"
-	"github.com/tinywasm/server"
+	"webtyp.com/router"
+	"webtyp.com/server"
 )
 
 func TestRouterRegistration(t *testing.T) {

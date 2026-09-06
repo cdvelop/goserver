@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/tinywasm/router"
+	"webtyp.com/router"
 )
 
 // NOTE: circular dep prevents importing app — mirror the interface locally.

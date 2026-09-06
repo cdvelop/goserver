@@ -3,7 +3,7 @@ package httpd
 import (
 	"fmt"
 
-	"github.com/tinywasm/model"
+	"webtyp.com/model"
 )
 
 func (s *Server) validateRBAC() error {

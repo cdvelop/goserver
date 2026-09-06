@@ -5,8 +5,8 @@ import (
 	"net"
 	"testing"
 
-	gobuildmock "github.com/tinywasm/gobuild/mock"
-	gorunmock "github.com/tinywasm/gorun/mock"
+	gobuildmock "webtyp.com/gobuild/mock"
+	gorunmock "webtyp.com/gorun/mock"
 )
 
 func TestHandleFileEvent_Fast(t *testing.T) {

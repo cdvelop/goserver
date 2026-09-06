@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 // TestPortConflictCleanup tests what happens when there's a port conflict
@@ -134,7 +134,7 @@ func main() {
 	// "Test 1: Start server normally" -> If ln is open, it WON'T start normally.
 	// Maybe `externalStrategy` handles this by just logging?
 	// But `h.StartServer` is async?
-	// Stack trace showed `github.com/tinywasm/server.(*externalStrategy).Start` waiting on channel.
+	// Stack trace showed `webtyp.com/server.(*externalStrategy).Start` waiting on channel.
 	// If it fails to start, does it exit?
 	// Let's assume the user wants standard behavior: Server starts.
 	// So `ln` must be closed.

@@ -13,8 +13,8 @@ package main
 import (
 	"log"
 
-	"github.com/tinywasm/env"
-	"github.com/tinywasm/server/httpd"
+	"webtyp.com/env"
+	"webtyp.com/server/httpd"
 )
 
 const (
@@ -46,7 +46,7 @@ func main() {
 	// those are Go closures in the dev process and can't cross the process
 	// boundary. Add your real routes/API modules directly below, e.g.:
 	//   s.Router().Get("/api/hello", func(ctx router.Context) { ... })
-	//   s.Mount(myAPIModule) // github.com/tinywasm/router.APIModule
+	//   s.Mount(myAPIModule) // webtyp.com/router.APIModule
 	//
 	// This file is only generated once (never overwritten) — edit it freely.
 

@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tinywasm/router"
+	"webtyp.com/router"
 )
 
 // lazyGzipWriter decides on the FIRST write whether to compress.
 //
 // It cannot decide earlier: the handler runs after the middleware, and a handler
-// may encode the body itself (tinywasm/client gzips the wasm binary and declares
+// may encode the body itself (webtyp/client gzips the wasm binary and declares
 // Content-Encoding). Compressing on top of that ships gzip(gzip(body)); the browser
 // decompresses one layer, finds gzip magic (1f 8b 08 00) where the wasm magic word
 // should be, and the app never starts. Encoding an already-encoded body is always a

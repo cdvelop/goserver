@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 // Mock strategy to verify timing and calls

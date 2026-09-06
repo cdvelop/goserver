@@ -1,20 +1,20 @@
-module github.com/tinywasm/server
+module webtyp.com/server
 
 go 1.25.2
 
 require (
 	github.com/smallstep/truststore v0.13.0
-	github.com/tinywasm/gobuild v0.0.27
-	github.com/tinywasm/gorun v0.0.24
-	github.com/tinywasm/json v0.5.23
-	github.com/tinywasm/markdown v0.0.2
-	github.com/tinywasm/model v0.1.7
-	github.com/tinywasm/router v0.1.29
 	golang.org/x/crypto v0.53.0
+	webtyp.com/fmt v0.25.7
+	webtyp.com/gobuild v0.0.27
+	webtyp.com/gorun v0.0.24
+	webtyp.com/json v0.5.23
+	webtyp.com/markdown v0.0.2
+	webtyp.com/model v0.1.7
+	webtyp.com/router v0.1.29
 )
 
 require (
-	github.com/tinywasm/fmt v0.25.7 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	howett.net/plist v1.0.0 // indirect

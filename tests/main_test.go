@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 func TestMain(m *testing.M) {

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 // Test that when a write produces a compilation error, fixing the file and

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tinywasm/fmt/lang"
+	"webtyp.com/fmt/lang"
 )
 
 // StartServer initiates the server using the current strategy (In-Memory or External)

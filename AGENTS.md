@@ -1,4 +1,4 @@
-# AGENTS.md — `tinywasm/server`
+# AGENTS.md — `webtyp/server`
 
 Restricciones de este repo para cualquier agente (humano o LLM) que edite código aquí.
 

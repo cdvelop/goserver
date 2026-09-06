@@ -21,7 +21,7 @@ func (s *Server) getOrCreateDevCert() (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	certDir := filepath.Join(home, ".tinywasm", "httpd", "certs")
+	certDir := filepath.Join(home, ".webtyp", "httpd", "certs")
 	if err := os.MkdirAll(certDir, 0755); err != nil {
 		return "", "", err
 	}
@@ -53,7 +53,7 @@ func (s *Server) getOrCreateDevCert() (string, string, error) {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"TinyWasm Dev CA"},
+			Organization: []string{"WebTyp Dev CA"},
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,

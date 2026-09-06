@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tinywasm/router"
+	"webtyp.com/router"
 )
 
 func (s *Server) wrapWithBatteries(handler http.Handler) http.Handler {

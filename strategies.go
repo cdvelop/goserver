@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tinywasm/gobuild"
-	"github.com/tinywasm/gorun"
-	"github.com/tinywasm/router"
-	"github.com/tinywasm/server/httpd"
+	"webtyp.com/gobuild"
+	"webtyp.com/gorun"
+	"webtyp.com/router"
+	"webtyp.com/server/httpd"
 )
 
 var ErrUnsupportedEvent = errors.New("server: unsupported file event, no rebuild triggered")

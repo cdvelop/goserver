@@ -1,14 +1,14 @@
-# tinywasm/server
+# webtyp/server
 <img src="docs/img/badges.svg">
 
 Short summary
- - `server` provides a specialized HTTP server handler for TinyWASM applications.
+ - `server` provides a specialized HTTP server handler for WebTyp applications.
  - It operates in two execution modes:
     1. **Internal (Default)**: Runs a lightweight `net/http` server within the application process, routed via `httpd.NewRouter`. Best for development speed and zero-file generation start.
     2. **External**: Generates a standalone main Go file, compiles it, and runs it as a separate process. Best for customization and production-like validation.
  - It also supports two compilation modes: **In-Memory** (default) and **On-Disk**.
  - It seamlessly handles the transition between execution modes via `SetExternalServerMode`.
- - The `httpd` subpackage (`github.com/tinywasm/server/httpd`) is the batteries-included `router.Router` adapter used internally and available for production use (see below).
+ - The `httpd` subpackage (`webtyp.com/server/httpd`) is the batteries-included `router.Router` adapter used internally and available for production use (see below).
 
 Public API (types and functions)
 
@@ -34,7 +34,7 @@ Public API (types and functions)
 		- `SetRunArgs(fn func() []string)`
 		- `SetDisableGlobalCleanup(disable bool)`
 	- Routing:
-		- `RegisterRoutes(fn func(router.Router))` — appends a route-registration callback (using `github.com/tinywasm/router`'s `Router` contract). Call before `StartServer`. Used by both Internal and External modes.
+		- `RegisterRoutes(fn func(router.Router))` — appends a route-registration callback (using `webtyp.com/router`'s `Router` contract). Call before `StartServer`. Used by both Internal and External modes.
 	- Lifecycle:
 		- `StartServer(wg *sync.WaitGroup)` — starts the server (async).
 		- `StopServer() error`
@@ -58,8 +58,8 @@ import (
     "os"
     "sync"
 
-    "github.com/tinywasm/router"
-    "github.com/tinywasm/server"
+    "webtyp.com/router"
+    "webtyp.com/server"
 )
 
 func main() {
@@ -89,7 +89,7 @@ func main() {
 
 ## `httpd` subpackage
 
-`github.com/tinywasm/server/httpd` implements `router.Router`/`router.Context` on top of
+`webtyp.com/server/httpd` implements `router.Router`/`router.Context` on top of
 `net/http`, with production batteries built in: gzip, no-cache headers, static file
 serving, TLS (AutoCert/custom cert/DevTLS), a `/health` endpoint, an optional `/_routes`
 JSON listing, and closed-by-default RBAC enforcement (`Config.Authn` for global identity,
@@ -102,7 +102,7 @@ s := httpd.New(httpd.Config{
     Port:   "8080",
     Health: true,
 })
-s.Mount(myAPIModule) // github.com/tinywasm/router.APIModule
+s.Mount(myAPIModule) // webtyp.com/router.APIModule
 if err := s.ListenAndServe(); err != nil {
     log.Fatal(err)
 }

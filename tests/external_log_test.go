@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 // TestExternalStrategyLogsAreVisible verifies that logs from gobuild and gorun

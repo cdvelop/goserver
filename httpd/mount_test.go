@@ -4,7 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/tinywasm/router"
+	"webtyp.com/router"
 )
 
 type fakeAPIModule struct{}

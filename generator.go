@@ -8,7 +8,7 @@ import (
 	"path"
 	"text/template"
 
-	"github.com/tinywasm/markdown"
+	"webtyp.com/markdown"
 )
 
 //go:embed templates/*

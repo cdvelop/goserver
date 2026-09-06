@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tinywasm/server"
+	"webtyp.com/server"
 )
 
 func newTestHandler(t *testing.T, sourceDir, outputDir, appRootDir string) *server.ServerHandler {
