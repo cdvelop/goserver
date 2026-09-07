@@ -120,8 +120,7 @@ func TestSetExternalServerMode_SwitchesToExternal(t *testing.T) {
 	}
 
 	// Verify file was generated
-	// Note: default MainInputFile is "main.go"
-	targetPath := filepath.Join(tmpData, "src", "main.go")
+	targetPath := filepath.Join(tmpData, server.GeneratedMainDir, "main.go")
 	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
 		t.Fatalf("expected server file to be generated at %s", targetPath)
 	}

@@ -44,7 +44,7 @@ func TestCreateTemplateServerGeneratesFile(t *testing.T) {
 	h.SetLogger(logger)
 
 	// Ensure external file doesn't exist initially
-	target := filepath.Join(h.AppRootDir, h.MainInputFileRelativePath())
+	target := filepath.Join(h.AppRootDir, server.GeneratedMainDir, "main.go")
 	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("expected no external server file at %s", target)
 	}
@@ -113,17 +113,8 @@ Found:
 	mu.Lock()
 	out := strings.Join(logMessages, "\n")
 	mu.Unlock()
-	if !strings.Contains(out, "generate server from markdown") && !strings.Contains(out, "Generating server files") {
-		// CreateTemplateServer might log to progress channel instead of h.Logger for some steps
-		// But generateServerFromEmbeddedMarkdown uses h.Logger if set.
-		// And we also verify h.executionInternal is now false (logic switched strategy before Compile)
-		// Wait, if Compile failed inside startServer, does it stay in ExternalStrategy?
-		// CreateTemplateServer:
-		// 1. Stop InMemory
-		// 2. Generate
-		// 3. Switch h.executionInternal=false, h.strategy=newExternal
-		// 4. h.strategy.Start() -> Compile -> Error
-		// So h.executionInternal should be false even if Start fails.
+	if !strings.Contains(out, "Generating server files") {
+		// Verify h.executionInternal is now false (logic switched strategy before Compile)
 	}
 
 	if h.Value() != "external" {

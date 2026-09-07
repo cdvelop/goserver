@@ -464,6 +464,83 @@ func (r *httpRouter) Socket(path string, h router.SocketFunc) router.Route {
 	return route
 }
 
+func (r *httpRouter) Mount(prefix string, fn func(router.Router)) {
+	if !strings.HasPrefix(prefix, "/") || (len(prefix) > 1 && strings.HasSuffix(prefix, "/")) {
+		panic(router.ErrMsgMountPrefix)
+	}
+	fn(&prefixRouter{parent: r, prefix: prefix})
+}
+
+type prefixRouter struct {
+	parent *httpRouter
+	prefix string
+}
+
+func (pr *prefixRouter) subPath(p string) string {
+	if p == "/" {
+		return pr.prefix
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return pr.prefix + p
+}
+
+func (pr *prefixRouter) Get(path string, h router.HandlerFunc) router.Route {
+	return pr.parent.Get(pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) Post(path string, h router.HandlerFunc) router.Route {
+	return pr.parent.Post(pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) Put(path string, h router.HandlerFunc) router.Route {
+	return pr.parent.Put(pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) Delete(path string, h router.HandlerFunc) router.Route {
+	return pr.parent.Delete(pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) Options(path string, h router.HandlerFunc) router.Route {
+	return pr.parent.Options(pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) Handle(method, path string, h router.HandlerFunc) router.Route {
+	return pr.parent.Handle(method, pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) Stream(path string, h router.StreamFunc) router.Route {
+	return pr.parent.Stream(pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) Socket(path string, h router.SocketFunc) router.Route {
+	return pr.parent.Socket(pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) PublicAsset(path string, h router.HandlerFunc) {
+	pr.parent.PublicAsset(pr.subPath(path), h)
+}
+
+func (pr *prefixRouter) PublicDir(prefix string, dir string) {
+	pr.parent.PublicDir(pr.subPath(prefix), dir)
+}
+
+func (pr *prefixRouter) Mount(prefix string, fn func(router.Router)) {
+	if !strings.HasPrefix(prefix, "/") || (len(prefix) > 1 && strings.HasSuffix(prefix, "/")) {
+		panic(router.ErrMsgMountPrefix)
+	}
+	fn(&prefixRouter{parent: pr.parent, prefix: pr.subPath(prefix)})
+}
+
+func (pr *prefixRouter) Use(m ...router.Middleware) {
+	pr.parent.Use(m...)
+}
+
+func (pr *prefixRouter) Routes() []router.RouteInfo {
+	return pr.parent.Routes()
+}
+
 func (r *httpRouter) Routes() []router.RouteInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

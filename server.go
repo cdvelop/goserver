@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -295,9 +296,16 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 		if h.executionInternal {
 			h.log("Switching to External Server Mode...")
 
-			// Generate template files if they don't exist
-			if err := h.generateServerFromEmbeddedMarkdown(); err != nil {
-				return err
+			if _, err := os.Stat(filepath.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)); err != nil {
+				modPath := readModulePath(h.AppRootDir)
+				cfg := MainConfig{
+					Port:      h.Port(),
+					PublicDir: h.PublicDir,
+					DevTLS:    h.Https,
+				}
+				if _, err := GenerateMain(h.AppRootDir, modPath, cfg); err != nil {
+					return err
+				}
 			}
 
 			// Stop current internal strategy
