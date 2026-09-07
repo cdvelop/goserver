@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	"webtyp.com/server"
@@ -123,9 +122,11 @@ func TestHasRoutes(t *testing.T) {
 	}
 }
 
-// Test 4 — when web/server.go exists it is the compile input and GenerateMain is
-// not called (the file is never overwritten).
-func TestEscapeHatch_UserMainWins(t *testing.T) {
+// Test 4 — GenerateMain only ever writes the generated artifact, never a
+// hand-written web/server.go. The strategy layer's decision to skip generation
+// entirely when web/server.go exists is covered white-box in the root package
+// (TestServerMainSelection); this keeps the black-box assertion compile-free.
+func TestEscapeHatch_UserMainNotOverwritten(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "example.com/app")
 	writeRoutes(t, root, "package routes\n\nimport \"webtyp.com/router\"\n\nfunc Register(r router.Router) {}\n")
@@ -135,33 +136,19 @@ func TestEscapeHatch_UserMainWins(t *testing.T) {
 		t.Fatal(err)
 	}
 	const userMain = "package main // hand written\n\nfunc main() {}\n"
-	if err := os.WriteFile(filepath.Join(webDir, "server.go"), []byte(userMain), 0o644); err != nil {
+	userFile := filepath.Join(webDir, "server.go")
+	if err := os.WriteFile(userFile, []byte(userMain), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	exit := make(chan bool, 1)
-	exit <- true
-	h := server.New()
-	h.SetAppRootDir(root)
-	h.SetSourceDir("web")
-	h.SetMainInputFile("server.go")
-	h.SetHTTPS(false)
-	h.SetPort("0")
-	h.SetExitChan(exit)
-	h.SetLogger(t.Log)
+	if _, err := server.GenerateMain(root, "example.com/app", server.MainConfig{Port: "8080", PublicDir: "web/public"}); err != nil {
+		t.Fatalf("GenerateMain: %v", err)
+	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	h.StartServer(&wg)
-	wg.Wait()
-
-	// The user's file is untouched...
-	got, _ := os.ReadFile(filepath.Join(webDir, "server.go"))
-	if string(got) != userMain {
+	if got, _ := os.ReadFile(userFile); string(got) != userMain {
 		t.Errorf("user server.go was modified:\n%s", got)
 	}
-	// ...and nothing was generated.
-	if _, err := os.Stat(filepath.Join(root, server.GeneratedMainDir, "main.go")); err == nil {
-		t.Error("GenerateMain ran even though web/server.go exists")
+	if _, err := os.Stat(filepath.Join(root, server.GeneratedMainDir, "main.go")); err != nil {
+		t.Errorf("generated artifact missing: %v", err)
 	}
 }

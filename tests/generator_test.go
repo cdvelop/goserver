@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"webtyp.com/server"
@@ -18,8 +19,32 @@ func newTestHandler(t *testing.T, sourceDir, outputDir, appRootDir string) *serv
 	h.SetPort("9090")
 	h.SetHTTPS(false) // these tests probe plain HTTP; TLS is covered in httpd/ and https_test.go
 	h.SetExitChan(make(chan bool, 10))
-	h.SetLogger(t.Log)
+	h.SetLogger(safeTestLogger(t))
 	return h
+}
+
+// safeTestLogger forwards to t.Log during the test and becomes a no-op once the
+// test completes. Several coverage tests hand the server a logger and then
+// return while a detached restart/compile goroutine is still running; calling
+// t.Log from that goroutine after the test finished is a data race with the
+// testing framework. The guard closes that window without losing log output
+// during the test itself.
+func safeTestLogger(t *testing.T) func(...any) {
+	t.Helper()
+	var mu sync.Mutex
+	finished := false
+	t.Cleanup(func() {
+		mu.Lock()
+		finished = true
+		mu.Unlock()
+	})
+	return func(args ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !finished {
+			t.Log(args...)
+		}
+	}
 }
 
 // writeRoutesFile creates a minimal routes/routes.go under root so that
