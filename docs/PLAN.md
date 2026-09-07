@@ -2,8 +2,9 @@
 PLAN: "fix: the certificate served at /__webtyp/ca cannot be trusted as a CA"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 7725115619946643162
+PR: https://github.com/webtyp/server/pull/18
 ---
 
 > This plan is dispatched via the CodeJob workflow. See skill: agents-workflow.

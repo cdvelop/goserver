@@ -24,6 +24,8 @@ const (
 	devCertIP4Loop  = "127.0.0.1"
 	devCertIP6Loop  = "::1"
 
+	devCAFilename    = "ca.crt"
+	devCAKeyFilename = "ca.key"
 	devCertFilename  = "localhost.crt"
 	devKeyFilename   = "localhost.key"
 	devSANsFilename  = "localhost.sans" // records the SANs the cert on disk was built with
@@ -33,6 +35,7 @@ const (
 	devCertDirPerm  os.FileMode = 0o755
 	devKeyFilePerm  os.FileMode = 0o600
 	devSANsFilePerm os.FileMode = 0o644
+	devCAValidFor               = 10 * 365 * 24 * time.Hour
 	devCertValidFor             = 365 * 24 * time.Hour
 
 	// EnvSkipTruststore, when set to any non-empty value, stops the dev
@@ -100,6 +103,81 @@ func desiredSANs() (dns []string, ips []net.IP, fingerprint string) {
 	return dns, ips, strings.Join(parts, ",")
 }
 
+// ensureDevCA returns the CA certificate and private key, loading them from
+// disk if valid, or generating and saving them if missing or expired.
+func ensureDevCA(dir string, logf func(...any)) (*x509.Certificate, *ecdsa.PrivateKey, []byte, error) {
+	caFile := filepath.Join(dir, devCAFilename)
+	caKeyFile := filepath.Join(dir, devCAKeyFilename)
+
+	if certPEM, err := os.ReadFile(caFile); err == nil {
+		if keyPEM, err := os.ReadFile(caKeyFile); err == nil {
+			certBlock, _ := pem.Decode(certPEM)
+			keyBlock, _ := pem.Decode(keyPEM)
+			if certBlock != nil && keyBlock != nil {
+				caCert, err1 := x509.ParseCertificate(certBlock.Bytes)
+				caPriv, err2 := x509.ParseECPrivateKey(keyBlock.Bytes)
+				if err1 == nil && err2 == nil && time.Now().Before(caCert.NotAfter) {
+					return caCert, caPriv, certBlock.Bytes, nil
+				}
+			}
+		}
+	}
+
+	caPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serial, err := rand.Int(rand.Reader, serialLimit)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	now := time.Now()
+	caTemplate := x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{Organization: []string{devCertOrg}},
+		NotBefore:             now,
+		NotAfter:              now.Add(devCAValidFor),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            0,
+		MaxPathLenZero:        true,
+	}
+
+	caDER, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, &caPriv.PublicKey, caPriv)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	caCert, err := x509.ParseCertificate(caDER)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if err := writePEM(caFile, pemTypeCert, caDER, devSANsFilePerm); err != nil {
+		return nil, nil, nil, err
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(caPriv)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := writePEM(caKeyFile, pemTypeECPrivate, keyDER, devKeyFilePerm); err != nil {
+		return nil, nil, nil, err
+	}
+
+	if os.Getenv(EnvSkipTruststore) == "" {
+		if ierr := truststore.Install(caCert); ierr != nil && logf != nil {
+			logf("Warning: failed to install dev CA certificate in truststore (browsers may show warning):", ierr)
+		}
+	}
+
+	return caCert, caPriv, caDER, nil
+}
+
 // ensureDevCert returns paths to the development certificate and key, generating
 // them on first use and regenerating them whenever the host's address set has
 // changed since the cert on disk was written. logf, when non-nil, receives a
@@ -110,6 +188,11 @@ func ensureDevCert(logf func(...any)) (certFile, keyFile string, err error) {
 		return "", "", err
 	}
 	if err := os.MkdirAll(dir, devCertDirPerm); err != nil {
+		return "", "", err
+	}
+
+	caCert, caPriv, caDER, err := ensureDevCA(dir, logf)
+	if err != nil {
 		return "", "", err
 	}
 
@@ -135,7 +218,7 @@ func ensureDevCert(logf func(...any)) (certFile, keyFile string, err error) {
 	}
 
 	now := time.Now()
-	template := x509.Certificate{
+	leafTemplate := x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               pkix.Name{Organization: []string{devCertOrg}},
 		NotBefore:             now,
@@ -143,16 +226,17 @@ func ensureDevCert(logf func(...any)) (certFile, keyFile string, err error) {
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
+		IsCA:                  false,
 		DNSNames:              dnsNames,
 		IPAddresses:           ipAddrs,
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	leafDER, err := x509.CreateCertificate(rand.Reader, &leafTemplate, caCert, &priv.PublicKey, caPriv)
 	if err != nil {
 		return "", "", err
 	}
 
-	if err := writePEM(certFile, pemTypeCert, derBytes, devSANsFilePerm); err != nil {
+	if err := writeChainPEM(certFile, leafDER, caDER); err != nil {
 		return "", "", err
 	}
 	keyDER, err := x509.MarshalECPrivateKey(priv)
@@ -164,17 +248,6 @@ func ensureDevCert(logf func(...any)) (certFile, keyFile string, err error) {
 	}
 	if err := os.WriteFile(sansFile, []byte(fingerprint), devSANsFilePerm); err != nil {
 		return "", "", err
-	}
-
-	// Install the CA in the OS truststore (best effort — a phone still needs to
-	// install it explicitly via CAPath). Skipped when EnvSkipTruststore is set,
-	// so a test run or CI job never triggers the root prompt.
-	if os.Getenv(EnvSkipTruststore) == "" {
-		if cert, perr := x509.ParseCertificate(derBytes); perr == nil {
-			if ierr := truststore.Install(cert); ierr != nil && logf != nil {
-				logf("Warning: failed to install dev certificate in truststore (browsers may show warning):", ierr)
-			}
-		}
 	}
 
 	return certFile, keyFile, nil
@@ -192,7 +265,22 @@ func fresh(certFile, keyFile, sansFile, fingerprint string) bool {
 	if err != nil {
 		return false
 	}
-	return string(recorded) == fingerprint
+	if string(recorded) != fingerprint {
+		return false
+	}
+	pemBytes, err := os.ReadFile(certFile)
+	if err != nil {
+		return false
+	}
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return false
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return false
+	}
+	return time.Now().Before(cert.NotAfter)
 }
 
 func writePEM(path, blockType string, der []byte, perm os.FileMode) error {
@@ -202,6 +290,20 @@ func writePEM(path, blockType string, der []byte, perm os.FileMode) error {
 	}
 	defer f.Close()
 	return pem.Encode(f, &pem.Block{Type: blockType, Bytes: der})
+}
+
+func writeChainPEM(path string, certDERs ...[]byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, devSANsFilePerm)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for _, der := range certDERs {
+		if err := pem.Encode(f, &pem.Block{Type: pemTypeCert, Bytes: der}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // getOrCreateDevCert is the listen path's entry point; it routes the truststore
@@ -218,9 +320,30 @@ func DevCertFiles() (certFile, keyFile string, err error) {
 	return ensureDevCert(nil)
 }
 
-// DevCertDER returns the development certificate, DER-encoded, generating it if
-// necessary. It is what CAPath serves to a device on the LAN.
-func DevCertDER() ([]byte, error) {
+// DevCA returns the DER of the development certificate authority — the file a
+// device installs to trust this server. It is NOT the certificate the server
+// presents; that is the leaf DevCA signed.
+func DevCA() ([]byte, error) {
+	if _, _, err := ensureDevCert(nil); err != nil {
+		return nil, err
+	}
+	dir, err := devCertDir()
+	if err != nil {
+		return nil, err
+	}
+	pemBytes, err := os.ReadFile(filepath.Join(dir, devCAFilename))
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, errDevCertDecode
+	}
+	return block.Bytes, nil
+}
+
+// devCertLeafDER returns the DER of the leaf certificate presented by the server.
+func devCertLeafDER() ([]byte, error) {
 	certFile, _, err := ensureDevCert(nil)
 	if err != nil {
 		return nil, err

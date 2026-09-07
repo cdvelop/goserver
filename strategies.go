@@ -81,7 +81,7 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 		// Serve the development CA so a device on the LAN can install it and
 		// trust the dev certificate. It is an asset: public by construction.
 		r.PublicAsset(httpd.CAPath, func(ctx router.Context) {
-			der, err := httpd.DevCertDER()
+			der, err := httpd.DevCA()
 			if err != nil {
 				ctx.WriteStatus(http.StatusServiceUnavailable)
 				return
