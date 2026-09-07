@@ -1,0 +1,316 @@
+---
+PLAN: "feat!: generate the server main; drop web/server.go; HTTPS by default in dev"
+EXECUTOR: jules
+REVIEWER: none
+---
+
+> This plan is dispatched via the CodeJob workflow. See skill: agents-workflow.
+> **Blocked until `webtyp.com/router` ships `routescan`** (phase 1 of
+> https://github.com/webtyp/docs — ROUTES_SINGLE_SOURCE_MASTER_PLAN.md).
+
+## Prerequisite — install the test runner
+
+External agents run in isolated environments where `gotest` is not installed.
+Run this **before anything else**; the acceptance criteria depend on it:
+
+```bash
+go install webtyp.com/devflow/cmd/gotest@latest
+```
+
+Then use `gotest` for the whole suite and `gotest -run TestName` for one test.
+Never call `go test` directly: `gotest` handles `-vet`, `-race`, `-cover`, the
+WASM suite and the README badges.
+
+# Plan — the server main becomes a build artifact
+
+## Context (the executing agent has none — read this fully)
+
+`webtyp.com/server` runs a user's project in two strategies:
+
+- **Internal** (`strategies.go:36`) — an in-process `httpd` server that serves
+  the compiled assets. Routes come from `ServerHandler.routes`, a list of
+  `func(router.Router)` filled by `RegisterRoutes`. **The user's own backend
+  never runs in this mode**: only `webtyp.com/app` registers anything, and only
+  asset routes.
+- **External** — `generator.go` writes `web/server.go` from the embedded
+  template `templates/server_basic.md` (never overwriting an existing file),
+  compiles it and runs it as a separate process.
+
+### The defect
+
+`templates/server_basic.md` documents the problem in its own comment:
+
+> *"This process runs standalone (External mode), so routes registered via
+> `ServerHandler.RegisterRoutes` in Internal mode do NOT carry over here — those
+> are Go closures in the dev process and can't cross the process boundary. Add
+> your real routes/API modules directly below."*
+
+Development and production therefore serve **different route sets**, kept in
+sync by hand. That violates the ecosystem rule that no behaviour may differ
+between local and deployed (skill: testing).
+
+### The mechanism this plan reuses
+
+`webtyp.com/sitec` already solves "compile code against the user's project"
+(`extract.go:75`):
+
+```go
+tmpDir := filepath.Join(projectRoot, ".ssr_extract") // INSIDE the module, deliberately
+mainFile := filepath.Join(tmpDir, "main.go")
+GenerateExtractorMain(mainFile, modules, ...)
+out, err := toolchain.Run(tmpDir, "run", "main.go")
+```
+
+The generated directory **must live inside `projectRoot`** — outside the module
+tree `go run` cannot resolve the project's imports. That constraint carries over
+here unchanged.
+
+The difference: the extractor runs once and is deleted (`defer os.RemoveAll`).
+The server runs indefinitely and must survive restarts, so its directory
+persists while the process lives.
+
+## Design gate
+
+Required by skill **api-design**.
+
+**1. Prior art.** No mainstream framework makes the developer write the HTTP
+bootstrap: Next.js has no server main, SvelteKit generates it per adapter, Rails
+ships `bin/rails server`, Django `manage.py`, Phoenix a mix task, and in Go,
+Encore generates the main. Writing `main()` by hand is the exception, not the
+norm.
+
+**2. Novice-name test.** Nothing new is exported to the user. The generated file
+is readable at a stable path, so it is generated code, not magic — the developer
+can open it.
+
+**3. Ledger.**
+
+```
+Files the developer maintains        −1   (web/server.go)
+Concepts to learn                    −1   (Internal vs External route registration)
+Places routes are declared           −1   (2 → 1)
+Ways to start a server                0   (the escape hatch replaces the old default, see below)
+Route sets that can diverge          −1   (1 → 0)
+```
+
+**4. Where it belongs.** Generating and running the project's server process is
+what this package already does. No new package.
+
+**5. What it deletes.** `templates/server_basic.md`,
+`generateServerFromEmbeddedMarkdown`, `getExpectedServerContent`, and the
+divergence they document.
+
+## Stage 1 — the generated main
+
+Add `maingen.go` to this package.
+
+```go
+// GeneratedMainDir is the directory, relative to the project root, holding the
+// generated server entry point. It must be inside the project: outside the
+// module tree the Go toolchain cannot resolve the project's own imports.
+const GeneratedMainDir = ".build/server"
+
+// GenerateMain writes the server entry point for the project at rootDir and
+// returns the absolute path of the written file.
+//
+// modulePath is the project's module path, read from go.mod.
+func GenerateMain(rootDir, modulePath string, cfg MainConfig) (string, error)
+
+// MainConfig is what the generated main hardcodes.
+type MainConfig struct {
+    Port      string
+    PublicDir string
+    DevTLS    bool // dev only; production uses AutoCert or Cert/Key
+}
+```
+
+The template it renders:
+
+```go
+//go:build !wasm
+
+// Code generated by webtyp.com/server. DO NOT EDIT.
+package main
+
+import (
+    "log"
+    "{{.ModulePath}}/routes"
+    "webtyp.com/server/httpd"
+)
+
+func main() {
+    s := httpd.New(httpd.Config{
+        Port:      "{{.Port}}",
+        PublicDir: "{{.PublicDir}}",
+        Gzip:      true,
+        Health:    true,
+        TLS:       httpd.TLSConfig{DevTLS: {{.DevTLS}}},
+    })
+    routes.Register(s.Router())
+    if err := s.ListenAndServe(); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+`routes.Register` may take dependency parameters after the first — see the
+master plan. **Read the actual signature** with `webtyp.com/router/routescan`
+and render the call to match; do not assume the one-parameter form.
+
+`GenerateMain` also writes `.build/` into the project's `.gitignore` if absent,
+using the existing `ServerHandler.SetGitIgnoreAdd` hook.
+
+## Stage 2 — the startup rule
+
+One rule, decided by one file, with no configuration:
+
+| `routes/routes.go` | Behaviour |
+|---|---|
+| exists | generate, compile and run the main — the user's backend runs |
+| absent | Internal in-memory asset server, nothing compiled |
+
+Add to this package:
+
+```go
+// HasRoutes reports whether the project declares routes and therefore needs a
+// compiled server process.
+func HasRoutes(rootDir string) bool
+```
+
+It checks for `routescan.DefaultFile` under `rootDir`. `strategies.go` selects
+the strategy from it.
+
+**Escape hatch — the one exception, deliberate.** If `web/server.go` exists, it
+is the user's own main and it wins: nothing is generated and it is compiled as
+today. This is the only second path in the plan, and it is greppable (a file
+either exists or does not) rather than a configuration flag. It exists because
+the tool must never silently override code the user wrote. It is **not**
+generated any more — a project acquires it only by the user creating it.
+
+## Stage 3 — reuse the External machinery
+
+The existing External strategy already compiles a main, runs it, restarts it on
+file events and shuts it down. Change only **which file it compiles**: the
+generated one, or `web/server.go` when it exists. Do not write a new lifecycle.
+
+The Internal strategy keeps its current asset-serving behaviour for the
+no-routes case, unchanged.
+
+## Stage 4 — HTTPS by default in development
+
+Both strategies set `TLS: httpd.TLSConfig{DevTLS: true}` by default.
+
+`ServerHandler.Https` already exists (`SetHTTPS`). Its default flips to `true`.
+Turning it off is an explicit call — never a silent default, and never read from
+a gitignored file.
+
+`strategies.go:128` carries a stale comment saying DevTLS cannot be reached from
+the internal strategy because the cert helper is unexported. Export what is
+needed from `httpd` and delete the comment; leaving it is leaving the defect.
+
+### The certificate must cover the LAN, not just localhost
+
+A developer testing on a phone opens `https://192.168.x.x:<port>`. A certificate
+issued only for `localhost` is rejected outright by Safari on iOS — and in that
+case it may not even offer the "visit this website anyway" escape.
+
+So the development certificate must carry, in its `subjectAltName`:
+
+- `DNS:localhost`
+- `IP:127.0.0.1` and `IP:::1`
+- **every non-loopback IPv4 address of the machine's active interfaces**, read
+  at certificate-generation time via `net.Interfaces()`.
+
+Regenerate the certificate when the set of addresses changes — a laptop that
+moves between networks otherwise keeps a certificate for an address it no longer
+has, and the failure is a bare TLS error with no explanation.
+
+### Serving the CA to a phone
+
+Clicking past the warning is not sufficient for this framework's target use
+case: browsers refuse to register a **Service Worker** on an origin with a
+certificate error, so PWA and offline behaviour — the thing being tested on the
+phone — cannot be tested that way. The device has to trust the certificate.
+
+Expose it:
+
+```go
+// CAPath is where the development certificate authority is served so a phone on
+// the LAN can install it.
+const CAPath = "/__webtyp/ca"
+```
+
+The internal and generated servers both serve the CA's DER at that path with
+`Content-Type: application/x-x509-ca-cert`. It is an asset —
+`r.PublicAsset(CAPath, …)` — public by construction.
+
+`webtyp.com/app` prints a QR code for `https://<lan-ip>:<port>/__webtyp/ca` in
+the TUI; that is a follow-up in that repository, not here. What this plan owes
+it is the path constant and the handler. The QR itself comes from
+`webtyp.com/qr` (`qr.Encode` → `Matrix.SVG`) — do not write a second encoder.
+
+**iOS needs two steps and gives no hint about the second.** Whatever surfaces
+this to the user must say both: install the profile (Settings → Profile
+Downloaded), **and then** enable it under Settings → General → About →
+Certificate Trust Settings. A profile installed but not trusted behaves exactly
+like no profile at all, with no message anywhere.
+
+Chrome trusts this certificate through `webtyp.com/devbrowser`, which is tracked
+in that repository's own plan. **This plan must expose the certificate's SPKI
+hash so that one can use it:**
+
+```go
+// DevCertSPKI returns the base64-encoded SHA-256 of the development
+// certificate's SubjectPublicKeyInfo, the value Chrome's
+// --ignore-certificate-errors-spki-list expects.
+func DevCertSPKI() (string, error)   // in webtyp.com/server/httpd
+```
+
+## Stage 5 — deletions
+
+Delete `generator.go`'s `generateServerFromEmbeddedMarkdown` and
+`getExpectedServerContent`, the `templates/` directory, and the `//go:embed
+templates/*` directive. `web/server.go` is never generated again.
+
+## Constraints
+
+- **No hardcoded strings.** `.build/server`, `main.go`, `.gitignore` and every
+  message are named constants.
+- **Thin `cmd/`.** This package has no `cmd/`; the rule applies to the callers.
+- Backend tooling: the standard library is legitimate. Do not "fix" stdlib
+  imports.
+
+## Tests
+
+1. `GenerateMain` into `t.TempDir()` → the file parses with `go/parser` and
+   imports `<modulePath>/routes`.
+2. `HasRoutes` true/false for a fixture with and without `routes/routes.go`.
+3. A `Register` with dependency parameters → the generated call matches its
+   arity.
+4. `web/server.go` present → `GenerateMain` is not called; the existing file is
+   the compile input.
+5. `.gitignore` gains `.build/` exactly once when run twice.
+6. `DevCertSPKI` returns a stable 44-character base64 string for a fixed cert.
+7. The generated development certificate carries `DNS:localhost`, `IP:127.0.0.1`
+   and every non-loopback IPv4 of the host, asserted against a fake
+   `net.Interfaces()`.
+8. `GET /__webtyp/ca` returns the CA in DER with the documented content type.
+
+## Acceptance criteria
+
+1. `grep -rn "server_basic\|generateServerFromEmbeddedMarkdown\|getExpectedServerContent" --include='*.go' .` → empty.
+2. `ls templates/` → does not exist.
+3. `grep -n "do NOT carry over here" -r .` → empty.
+4. `go build ./... && go vet ./... && go test ./...` → clean.
+
+## Stages
+
+| # | Stage | File(s) | Gate |
+|---|---|---|---|
+| 1 | `GenerateMain` + template | `maingen.go` | tests 1, 3, 5 |
+| 2 | `HasRoutes` + selection | `strategies.go` | tests 2, 4 |
+| 3 | reuse External lifecycle | `strategies.go` | builds and runs a fixture |
+| 4 | DevTLS default, LAN SANs, `DevCertSPKI`, `CAPath` | `strategies.go`, `httpd/tls.go` | tests 6, 7, 8; criterion 3 |
+| 5 | deletions | `generator.go`, `templates/` | criteria 1, 2 |
+
+Sequential.
