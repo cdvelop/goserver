@@ -17,6 +17,7 @@ func TestRouterRegistration(t *testing.T) {
 	tmp := t.TempDir()
 	h := server.New()
 	h.SetAppRootDir(tmp)
+	h.SetHTTPS(false) // this test exercises routing over plain HTTP
 	h.SetPort("9091")
 	h.SetLogger(t.Log)
 
@@ -72,6 +73,7 @@ func TestRouterMiddleware(t *testing.T) {
 	tmp := t.TempDir()
 	h := server.New()
 	h.SetAppRootDir(tmp)
+	h.SetHTTPS(false) // this test exercises middleware over plain HTTP
 	h.SetPort("9092")
 	h.SetLogger(t.Log)
 

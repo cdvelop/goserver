@@ -2,7 +2,6 @@ package server
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"sync"
 
@@ -103,6 +102,7 @@ func New() *ServerHandler {
 		PublicDir:                   "web/public",
 		MainInputFile:               "main.go",
 		AppPort:                     "8080",
+		Https:                       true, // HTTPS-by-default in dev; SetHTTPS(false) is an explicit opt-out
 		Logger:                      nil,
 		ExitChan:                    make(chan bool),
 		ArgumentsForCompilingServer: func() []string { return nil },
@@ -169,7 +169,9 @@ func (h *ServerHandler) Port() string {
 	return h.Config.AppPort
 }
 
-// SetHTTPS enables or disables HTTPS
+// SetHTTPS enables or disables HTTPS. The default is true; passing false is an
+// explicit, deliberate opt-out — never a silent default, never read from a
+// gitignored file.
 func (h *ServerHandler) SetHTTPS(enabled bool) *ServerHandler {
 	h.Config.Https = enabled
 	return h
@@ -296,16 +298,8 @@ func (h *ServerHandler) SetExternalServerMode(external bool) error {
 		if h.executionInternal {
 			h.log("Switching to External Server Mode...")
 
-			if _, err := os.Stat(filepath.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)); err != nil {
-				modPath := readModulePath(h.AppRootDir)
-				cfg := MainConfig{
-					Port:      h.Port(),
-					PublicDir: h.PublicDir,
-					DevTLS:    h.Https,
-				}
-				if _, err := GenerateMain(h.AppRootDir, modPath, cfg); err != nil {
-					return err
-				}
+			if err := h.ensureServerMain(true); err != nil {
+				return err
 			}
 
 			// Stop current internal strategy

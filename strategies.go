@@ -36,10 +36,12 @@ type ServerStrategy interface {
 // --- Internal Strategy ---
 
 type internalStrategy struct {
-	handler *ServerHandler
-	server  *http.Server
-	mu      sync.Mutex
-	running bool
+	handler  *ServerHandler
+	server   *http.Server
+	certFile string // set when handler.Https: dev TLS certificate
+	keyFile  string
+	mu       sync.Mutex
+	running  bool
 }
 
 func newInternalStrategy(h *ServerHandler) *internalStrategy {
@@ -74,6 +76,20 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	}
 	srvObj := httpd.New(hcfg)
 	r := srvObj.Router()
+
+	if s.handler.Https {
+		// Serve the development CA so a device on the LAN can install it and
+		// trust the dev certificate. It is an asset: public by construction.
+		r.PublicAsset(httpd.CAPath, func(ctx router.Context) {
+			der, err := httpd.DevCertDER()
+			if err != nil {
+				ctx.WriteStatus(http.StatusServiceUnavailable)
+				return
+			}
+			ctx.SetHeader("Content-Type", httpd.CADownloadContentType)
+			ctx.Write(der)
+		})
+	}
 
 	if len(s.handler.routes) > 0 {
 		for _, registerConfig := range s.handler.routes {
@@ -125,11 +141,19 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	}
 
 	if s.handler.Https {
-		// If HTTPS is enabled in internal mode, we use httpd's DevTLS
-		// but since we already have a mux and http.Server here, we just need the certs
-		// Strategies.go is in package server, so we can't easily call httpd.getOrCreateDevCert
-		// unless we export it or move the logic.
-		// For now, let's keep internalStrategy as is, but WaitForPortListening will use https.
+		var certFile, keyFile string
+		certFile, keyFile, err = httpd.DevCertFiles()
+		if err != nil {
+			s.handler.log("Internal Server dev-certificate error:", err)
+			s.running = false
+			s.server = nil
+			s.mu.Unlock()
+			if wg != nil {
+				wg.Done()
+			}
+			return err
+		}
+		s.certFile, s.keyFile = certFile, keyFile
 	}
 	s.mu.Unlock()
 
@@ -152,17 +176,17 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 	// Signal that server is ready to accept connections and trigger browser open
 	go func() {
 		// Wait max 5 seconds for the internal server to actually respond
-		if WaitForPortListening(s.handler.Port(), 5*time.Second, false) {
+		if WaitForPortListening(s.handler.Port(), 5*time.Second, s.handler.Https) {
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
-					s.handler.OpenBrowser(s.handler.Port(), false) // Internal server is always http
+					s.handler.OpenBrowser(s.handler.Port(), s.handler.Https)
 				}
 			})
 		} else {
 			s.handler.log("Warning: Internal Server port not responding, trying to open browser anyway...")
 			s.handler.openBrowserOnce.Do(func() {
 				if s.handler.OpenBrowser != nil {
-					s.handler.OpenBrowser(s.handler.Port(), false)
+					s.handler.OpenBrowser(s.handler.Port(), s.handler.Https)
 				}
 			})
 		}
@@ -170,10 +194,17 @@ func (s *internalStrategy) Start(wg *sync.WaitGroup) error {
 
 	// Capture server instance to avoid race condition with Stop() setting s.server = nil
 	srv := s.server
+	certFile, keyFile := s.certFile, s.keyFile
 
 	go func() {
-		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			s.handler.log("In-Memory Server error:", err)
+		var serveErr error
+		if certFile != "" {
+			serveErr = srv.ServeTLS(ln, certFile, keyFile)
+		} else {
+			serveErr = srv.Serve(ln)
+		}
+		if serveErr != nil && serveErr != http.ErrServerClosed {
+			s.handler.log("In-Memory Server error:", serveErr)
 		}
 	}()
 
@@ -233,7 +264,7 @@ func (s *internalStrategy) Restart() error {
 
 	// Wait for server to be ready before returning
 	// This prevents race conditions where browser reload is triggered before server is up
-	if !WaitForPortListening(s.handler.Port(), 5*time.Second, false) {
+	if !WaitForPortListening(s.handler.Port(), 5*time.Second, s.handler.Https) {
 		return errors.New("timeout waiting for internal server restart")
 	}
 	return nil
@@ -318,8 +349,12 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 		exe_ext = ".exe"
 	}
 
-	// Extract output name from input file (e.g., "server.go" -> "server")
-	outName := h.mainFileExternalServer
+	// The file to compile: the user's own main when present, otherwise the
+	// generated artifact at .build/server/main.go.
+	mainRel := h.serverMainRelPath()
+
+	// Extract output name from the compiled file (e.g. "main.go" -> "main")
+	outName := filepath.Base(mainRel)
 	if ext := filepath.Ext(outName); ext != "" {
 		outName = outName[:len(outName)-len(ext)]
 	}
@@ -331,7 +366,7 @@ func newExternalStrategy(h *ServerHandler) *externalStrategy {
 
 	compiler := gobuild.New(&gobuild.Config{
 		Command:                   "go",
-		MainInputFileRelativePath: filepath.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer),
+		MainInputFileRelativePath: filepath.Join(h.AppRootDir, mainRel),
 		OutName:                   outName,
 		Extension:                 exe_ext,
 		CompilingArguments:        h.ArgumentsForCompilingServer,

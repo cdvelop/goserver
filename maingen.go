@@ -20,8 +20,25 @@ import (
 const (
 	GeneratedMainDir      = ".build/server"
 	GeneratedMainFilename = "main.go"
-	GitIgnoreFile         = ".gitignore"
 	BuildDirGitIgnore     = ".build/"
+
+	// goModFilename is the module manifest read for the module path.
+	goModFilename = "go.mod"
+	// moduleDirectivePrefix is the token that opens the module line in go.mod.
+	moduleDirectivePrefix = "module"
+	// registerFuncName is the entry point every routes/routes.go exports.
+	registerFuncName = "Register"
+	// routerArgExpr is the first argument passed to routes.Register: the
+	// running server's router.
+	routerArgExpr = "s.Router()"
+	// dependencyArg is what the generated call passes for every parameter
+	// after the router. routescan does not report Register's arity, so a
+	// dependency the app wires by hand is rendered as a nil placeholder the
+	// developer replaces in the generated file.
+	dependencyArg = "nil"
+
+	dirPerm  os.FileMode = 0o755
+	filePerm os.FileMode = 0o644
 )
 
 // MainConfig is what the generated main hardcodes.
@@ -47,6 +64,7 @@ package main
 import (
 	"log"
 	"{{.ModulePath}}/routes"
+	"webtyp.com/router"
 	"webtyp.com/server/httpd"
 )
 
@@ -59,6 +77,19 @@ func main() {
 		TLS:       httpd.TLSConfig{DevTLS: {{.DevTLS}}},
 	})
 	routes.Register({{.RegisterArgs}})
+
+	// Serve the development CA so a device on the LAN can install it and trust
+	// the dev certificate. Responds 503 when no dev certificate exists.
+	s.Router().PublicAsset(httpd.CAPath, func(c router.Context) {
+		der, err := httpd.DevCertDER()
+		if err != nil {
+			c.WriteStatus(503)
+			return
+		}
+		c.SetHeader("Content-Type", httpd.CADownloadContentType)
+		c.Write(der)
+	})
+
 	if err := s.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
@@ -74,18 +105,15 @@ func HasRoutes(rootDir string) bool {
 }
 
 func readModulePath(rootDir string) string {
-	content, err := os.ReadFile(filepath.Join(rootDir, "go.mod"))
+	content, err := os.ReadFile(filepath.Join(rootDir, goModFilename))
 	if err != nil {
 		return filepath.Base(rootDir)
 	}
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "module ") || strings.HasPrefix(line, "module\t") {
-			fields := strings.Fields(line)
-			if len(fields) >= 2 {
-				return fields[1]
-			}
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) >= 2 && fields[0] == moduleDirectivePrefix {
+			return fields[1]
 		}
 	}
 	return filepath.Base(rootDir)
@@ -97,7 +125,7 @@ func readModulePath(rootDir string) string {
 // modulePath is the project's module path, read from go.mod.
 func GenerateMain(rootDir, modulePath string, cfg MainConfig) (string, error) {
 	outDir := filepath.Join(rootDir, GeneratedMainDir)
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, dirPerm); err != nil {
 		return "", fmt.Errorf("creating build directory: %w", err)
 	}
 
@@ -128,20 +156,24 @@ func GenerateMain(rootDir, modulePath string, cfg MainConfig) (string, error) {
 		return "", fmt.Errorf("executing main template: %w", err)
 	}
 
-	if err := os.WriteFile(absPath, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(absPath, buf.Bytes(), filePerm); err != nil {
 		return "", fmt.Errorf("writing generated main file: %w", err)
 	}
-
-	_ = ensureGitIgnore(rootDir, BuildDirGitIgnore)
 
 	return absPath, nil
 }
 
+// detectRegisterArgs renders the argument list for the routes.Register call in
+// the generated main. routescan reports the routes a project declares but not
+// the signature of Register itself, so its arity is read here from the AST:
+// the router is always the first argument, and every dependency parameter after
+// it becomes a nil placeholder the developer fills in. Any parse failure falls
+// back to the single-argument form rather than aborting generation.
 func detectRegisterArgs(routesFile string) string {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, routesFile, nil, 0)
 	if err != nil {
-		return "s.Router()"
+		return routerArgExpr
 	}
 
 	var targetFunc *ast.FuncDecl
@@ -150,7 +182,7 @@ func detectRegisterArgs(routesFile string) string {
 		if !ok || fn.Type == nil || fn.Type.Params == nil {
 			continue
 		}
-		if fn.Name.Name == "Register" {
+		if fn.Name.Name == registerFuncName {
 			targetFunc = fn
 			break
 		}
@@ -162,7 +194,7 @@ func detectRegisterArgs(routesFile string) string {
 	}
 
 	if targetFunc == nil {
-		return "s.Router()"
+		return routerArgExpr
 	}
 
 	paramCount := 0
@@ -175,13 +207,13 @@ func detectRegisterArgs(routesFile string) string {
 	}
 
 	if paramCount <= 1 {
-		return "s.Router()"
+		return routerArgExpr
 	}
 
 	args := make([]string, paramCount)
-	args[0] = "s.Router()"
+	args[0] = routerArgExpr
 	for i := 1; i < paramCount; i++ {
-		args[i] = "nil"
+		args[i] = dependencyArg
 	}
 	return strings.Join(args, ", ")
 }
@@ -196,27 +228,4 @@ func isRouterParam(expr ast.Expr) bool {
 		return false
 	}
 	return (ident.Name == "router" || ident.Name == "Router") && sel.Sel.Name == "Router"
-}
-
-func ensureGitIgnore(rootDir, entry string) error {
-	ignorePath := filepath.Join(rootDir, GitIgnoreFile)
-	content, err := os.ReadFile(ignorePath)
-	if err == nil {
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
-			if strings.TrimSpace(line) == strings.TrimSpace(entry) {
-				return nil
-			}
-		}
-		if !strings.HasSuffix(string(content), "\n") {
-			content = append(content, '\n')
-		}
-		content = append(content, []byte(entry+"\n")...)
-		return os.WriteFile(ignorePath, content, 0644)
-	}
-
-	if os.IsNotExist(err) {
-		return os.WriteFile(ignorePath, []byte(entry+"\n"), 0644)
-	}
-	return err
 }

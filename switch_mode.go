@@ -2,8 +2,6 @@ package server
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 )
 
 // CreateTemplateServer switches from Internal to External mode.
@@ -25,16 +23,8 @@ func (h *ServerHandler) CreateTemplateServer() error {
 	}
 
 	h.log("Generating server files...")
-	if _, err := os.Stat(filepath.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)); err != nil {
-		modPath := readModulePath(h.AppRootDir)
-		cfg := MainConfig{
-			Port:      h.Port(),
-			PublicDir: h.PublicDir,
-			DevTLS:    h.Https,
-		}
-		if _, err := GenerateMain(h.AppRootDir, modPath, cfg); err != nil {
-			return errors.Join(errors.New("failed to generate server main"), err)
-		}
+	if err := h.ensureServerMain(true); err != nil {
+		return errors.Join(errors.New("failed to generate server main"), err)
 	}
 
 	h.log("Switching to External Process Strategy...")
