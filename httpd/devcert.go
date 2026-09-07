@@ -34,6 +34,13 @@ const (
 	devKeyFilePerm  os.FileMode = 0o600
 	devSANsFilePerm os.FileMode = 0o644
 	devCertValidFor             = 365 * 24 * time.Hour
+
+	// EnvSkipTruststore, when set to any non-empty value, stops the dev
+	// certificate from being installed into the OS trust store. The server
+	// still generates and serves the certificate (and CAPath still works); only
+	// the root-requiring system-trust step — which shells out to `sudo` on
+	// Linux and prompts — is skipped. Test runners and CI set this.
+	EnvSkipTruststore = "WEBTYP_DEVCERT_SKIP_TRUSTSTORE"
 )
 
 // interfaceAddrs is net.InterfaceAddrs, indirected so tests can control the set
@@ -160,10 +167,13 @@ func ensureDevCert(logf func(...any)) (certFile, keyFile string, err error) {
 	}
 
 	// Install the CA in the OS truststore (best effort — a phone still needs to
-	// install it explicitly via CAPath).
-	if cert, perr := x509.ParseCertificate(derBytes); perr == nil {
-		if ierr := truststore.Install(cert); ierr != nil && logf != nil {
-			logf("Warning: failed to install dev certificate in truststore (browsers may show warning):", ierr)
+	// install it explicitly via CAPath). Skipped when EnvSkipTruststore is set,
+	// so a test run or CI job never triggers the root prompt.
+	if os.Getenv(EnvSkipTruststore) == "" {
+		if cert, perr := x509.ParseCertificate(derBytes); perr == nil {
+			if ierr := truststore.Install(cert); ierr != nil && logf != nil {
+				logf("Warning: failed to install dev certificate in truststore (browsers may show warning):", ierr)
+			}
 		}
 	}
 
