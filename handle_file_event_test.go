@@ -13,6 +13,7 @@ func TestHandleFileEvent_Fast(t *testing.T) {
 	TestMode = true
 	h := New()
 	h.SetPort("0")                    // Use port 0 to avoid conflicts
+	h.SetHTTPS(false)                 // fake listener below speaks plain HTTP
 	h.SetLogger(func(args ...any) {}) // No-op logger
 
 	compiler := &gobuildmock.FakeCompiler{}

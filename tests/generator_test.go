@@ -16,42 +16,43 @@ func newTestHandler(t *testing.T, sourceDir, outputDir, appRootDir string) *serv
 	h.SetSourceDir(sourceDir)
 	h.SetOutputDir(outputDir)
 	h.SetPort("9090")
+	h.SetHTTPS(false) // these tests probe plain HTTP; TLS is covered in httpd/ and https_test.go
 	h.SetExitChan(make(chan bool, 10))
 	h.SetLogger(t.Log)
 	return h
 }
 
+// writeRoutesFile creates a minimal routes/routes.go under root so that
+// HasRoutes(root) is true and the generated-main path is exercised.
+func writeRoutesFile(t *testing.T, root string) {
+	t.Helper()
+	dir := filepath.Join(root, "routes")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating routes dir: %v", err)
+	}
+	const src = "package routes\n\nimport \"webtyp.com/router\"\n\nfunc Register(r router.Router) {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "routes.go"), []byte(src), 0o644); err != nil {
+		t.Fatalf("writing routes.go: %v", err)
+	}
+}
+
 func TestGenerateCreatesFile(t *testing.T) {
 	tmp := t.TempDir()
-	sourceDir := "src/app"
-	outputDir := "deploy"
-	fullSourcePath := filepath.Join(tmp, sourceDir)
-	if err := os.MkdirAll(fullSourcePath, 0755); err != nil {
-		t.Fatalf("creating source dir: %v", err)
-	}
+	sourceDir := "web"
+	outputDir := "web"
 	h := newTestHandler(t, sourceDir, outputDir, tmp)
+	writeRoutesFile(t, tmp)
 
-	// Ensure no existing file
-	target := filepath.Join(fullSourcePath, h.MainInputFile)
+	target := filepath.Join(tmp, server.GeneratedMainDir, "main.go")
 	if _, err := os.Stat(target); err == nil {
 		t.Fatalf("expected no existing file at %s", target)
 	}
 
-	// Signal exit immediately so CreateTemplateServer doesn't block on Start.
-	// We close the channel so all workers (strategy, gorun) receive the signal.
 	close(h.ExitChan)
 
-	// Use CreateTemplateServer instead of internal generateServerFromEmbeddedMarkdown
-	// It will stop internal, generate, compile, and run. We expect it to generate.
-	// Compilation might fail in test env, but we only care about generation here.
 	if err := h.CreateTemplateServer(); err != nil {
-		// If error is just compilation failure, we can ignore it if file was generated
 		t.Logf("CreateTemplateServer returned error: %v", err)
 	}
-
-	// Wait a bit for file to be generated?
-	// CreateTemplateServer calls generate synchronously before Start.
-	// So file should be there.
 
 	b, err := os.ReadFile(target)
 	if err != nil {
@@ -64,37 +65,30 @@ func TestGenerateCreatesFile(t *testing.T) {
 	if !strings.Contains(content, "9090") {
 		t.Errorf("generated file missing substituted AppPort (9090)")
 	}
-	// Verify it uses httpd
 	if !strings.Contains(content, `httpd.New`) {
 		t.Errorf("generated file missing httpd.New")
 	}
-	// Verify it uses env.Arg
-	if !strings.Contains(content, `env.Arg(argPort)`) {
-		t.Errorf("generated file missing env.Arg(argPort)")
-	}
-	// Verify default public dir
 	if !strings.Contains(content, `web/public`) {
 		t.Errorf("generated file missing default public dir (web/public)")
 	}
 }
 
-func TestGenerateDoesNotOverwrite(t *testing.T) {
+func TestGenerateDoesNotOverwriteExistingServerFile(t *testing.T) {
 	tmp := t.TempDir()
-	sourceDir := "src/app"
-	outputDir := "deploy"
+	sourceDir := "web"
+	outputDir := "web"
 	fullSourcePath := filepath.Join(tmp, sourceDir)
 	if err := os.MkdirAll(fullSourcePath, 0755); err != nil {
 		t.Fatalf("creating source dir: %v", err)
 	}
 	h := newTestHandler(t, sourceDir, outputDir, tmp)
-	target := filepath.Join(fullSourcePath, h.MainInputFile)
+	target := filepath.Join(fullSourcePath, "server.go")
 
 	orig := "__ORIGINAL__"
 	if err := os.WriteFile(target, []byte(orig), 0644); err != nil {
 		t.Fatalf("writing original file: %v", err)
 	}
 
-	// Signal exit immediately
 	close(h.ExitChan)
 
 	if err := h.CreateTemplateServer(); err != nil {

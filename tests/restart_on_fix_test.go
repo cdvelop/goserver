@@ -70,6 +70,7 @@ func main() {
 	}
 
 	handler := server.New()
+	handler.SetHTTPS(false) // fixture mains below serve plain HTTP
 	handler.SetAppRootDir(tmp)
 	handler.SetSourceDir(filepath.ToSlash(strings.TrimPrefix(sourceDir, tmp+string(os.PathSeparator))))
 	handler.SetOutputDir(filepath.ToSlash(strings.TrimPrefix(outputDir, tmp+string(os.PathSeparator))))

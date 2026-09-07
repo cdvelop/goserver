@@ -2,7 +2,6 @@ package server
 
 import (
 	"net"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -10,19 +9,40 @@ import (
 	"webtyp.com/fmt/lang"
 )
 
+// Startup-decision log lines. Kept as constants so the decision a project took
+// is greppable in a captured log. Each is logged with the absolute path that
+// drove the decision.
+const (
+	LogExternalUserMain  = "External mode: user-written server main at"
+	LogExternalGenerated = "External mode: routes/routes.go present, generated main from"
+	LogInternalNoRoutes  = "Internal mode: no routes/routes.go and no server main, checked"
+)
+
 // StartServer initiates the server using the current strategy (In-Memory or External)
 func (h *ServerHandler) StartServer(wg *sync.WaitGroup) {
-	serverFilePath := filepath.Join(h.AppRootDir, h.SourceDir, h.mainFileExternalServer)
+	if h.needsExternalProcess() {
+		if err := h.ensureServerMain(false); err != nil {
+			h.log("Failed to generate server main:", err)
+			if wg != nil {
+				wg.Done()
+			}
+			return
+		}
+	}
 
 	h.strategyMu.Lock()
-	if _, err := os.Stat(serverFilePath); err == nil {
+	if h.needsExternalProcess() {
 		if h.executionInternal {
 			h.executionInternal = false
 			h.strategy = newExternalStrategy(h)
 		}
-		h.log(lang.Translate("External", "mode:", "found", serverFilePath).String())
+		if h.hasHandWrittenMain() {
+			h.log(lang.Translate(LogExternalUserMain).String(), filepath.Join(h.AppRootDir, h.serverMainRelPath()))
+		} else {
+			h.log(lang.Translate(LogExternalGenerated).String(), h.routesManifestPath())
+		}
 	} else {
-		h.log(lang.Translate("Internal", "mode:", serverFilePath, "does", "not", "exist", "—", "served", "from", "memory").String())
+		h.log(lang.Translate(LogInternalNoRoutes).String(), h.routesManifestPath())
 	}
 	isInternal := h.executionInternal
 	strategy := h.strategy

@@ -1,6 +1,8 @@
 package server
 
-import "errors"
+import (
+	"errors"
+)
 
 // CreateTemplateServer switches from Internal to External mode.
 // It generates the server files (if not present), compiles, and runs them.
@@ -21,9 +23,8 @@ func (h *ServerHandler) CreateTemplateServer() error {
 	}
 
 	h.log("Generating server files...")
-	// Generate the physical files for the server
-	if err := h.generateServerFromEmbeddedMarkdown(); err != nil {
-		return errors.Join(errors.New("failed to generate server files"), err)
+	if err := h.ensureServerMain(true); err != nil {
+		return errors.Join(errors.New("failed to generate server main"), err)
 	}
 
 	h.log("Switching to External Process Strategy...")

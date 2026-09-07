@@ -120,8 +120,7 @@ func TestSetExternalServerMode_SwitchesToExternal(t *testing.T) {
 	}
 
 	// Verify file was generated
-	// Note: default MainInputFile is "main.go"
-	targetPath := filepath.Join(tmpData, "src", "main.go")
+	targetPath := filepath.Join(tmpData, server.GeneratedMainDir, "main.go")
 	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
 		t.Fatalf("expected server file to be generated at %s", targetPath)
 	}
@@ -160,9 +159,12 @@ func TestGitIgnoreAdd_CalledOnExternalMode(t *testing.T) {
 	exitChan := make(chan bool, 1)
 	exitChan <- true
 
-	var capturedEntry string
+	var mu sync.Mutex
+	var entries []string
 	gitIgnoreAdd := func(entry string) error {
-		capturedEntry = entry
+		mu.Lock()
+		defer mu.Unlock()
+		entries = append(entries, entry)
 		return nil
 	}
 
@@ -174,16 +176,27 @@ func TestGitIgnoreAdd_CalledOnExternalMode(t *testing.T) {
 	h.SetExitChan(exitChan)
 	h.SetGitIgnoreAdd(gitIgnoreAdd)
 
-	// Switch to external mode - this should trigger GitIgnoreAdd
-	err := h.SetExternalServerMode(true)
-	if err != nil {
+	// Switch to external mode - this generates the main and starts a process,
+	// each of which registers a .gitignore entry through the hook.
+	if err := h.SetExternalServerMode(true); err != nil {
 		t.Logf("SetExternalServerMode error: %v", err)
 	}
 
-	// Verify the binary path was added to gitignore
-	expectedPath := filepath.Join("web", "server") // OutputDir + binary name (no .exe on linux)
-	if capturedEntry != expectedPath {
-		t.Errorf("GitIgnoreAdd called with %q, want %q", capturedEntry, expectedPath)
+	mu.Lock()
+	defer mu.Unlock()
+	has := func(want string) bool {
+		for _, e := range entries {
+			if e == want {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(server.BuildDirGitIgnore) {
+		t.Errorf("GitIgnoreAdd never received %q; got %v", server.BuildDirGitIgnore, entries)
+	}
+	if wantBinary := filepath.Join("web", "main"); !has(wantBinary) {
+		t.Errorf("GitIgnoreAdd never received binary path %q; got %v", wantBinary, entries)
 	}
 }
 

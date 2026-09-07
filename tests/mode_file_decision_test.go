@@ -123,16 +123,23 @@ func TestNoSeEscribeNingunaClaveDeModo(t *testing.T) {
 	}
 }
 
-// TestLaDecisionSeRegistraConLaRutaCompleta: el log de arranque debe contener
-// la ruta absoluta comprobada, en ambas direcciones (externa e interna).
+// TestLaDecisionSeRegistraConLaRutaCompleta: el log de arranque debe nombrar la
+// regla aplicada y la ruta absoluta que la decidió, en ambas direcciones.
 func TestLaDecisionSeRegistraConLaRutaCompleta(t *testing.T) {
 	tests := []struct {
 		name       string
 		withFile   bool
 		wantSubstr string
+		wantPath   func(root string) string
 	}{
-		{"existe", true, "External mode: found"},
-		{"no existe", false, "Internal mode:"},
+		{
+			"user server main", true, server.LogExternalUserMain,
+			func(root string) string { return filepath.Join(root, "web", "server.go") },
+		},
+		{
+			"no routes, no main", false, server.LogInternalNoRoutes,
+			func(root string) string { return filepath.Join(root, "routes", "routes.go") },
+		},
 	}
 
 	for _, tt := range tests {
@@ -143,9 +150,8 @@ func TestLaDecisionSeRegistraConLaRutaCompleta(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			serverFilePath := filepath.Join(svrDir, "server.go")
 			if tt.withFile {
-				if err := os.WriteFile(serverFilePath, []byte("package main"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(svrDir, "server.go"), []byte("package main"), 0644); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -167,6 +173,7 @@ func TestLaDecisionSeRegistraConLaRutaCompleta(t *testing.T) {
 			h.SetAppRootDir(tmpData)
 			h.SetSourceDir("web")
 			h.SetMainInputFile("server.go")
+			h.SetHTTPS(false)
 			h.SetPort("19094")
 			h.SetExitChan(exitChan)
 			h.SetLogger(logger)
@@ -182,8 +189,9 @@ func TestLaDecisionSeRegistraConLaRutaCompleta(t *testing.T) {
 			if !strings.Contains(allLogs, tt.wantSubstr) {
 				t.Fatalf("launch log missing %q; got:\n%s", tt.wantSubstr, allLogs)
 			}
-			if !strings.Contains(allLogs, serverFilePath) {
-				t.Fatalf("launch log missing absolute path %q; got:\n%s", serverFilePath, allLogs)
+			wantPath := tt.wantPath(tmpData)
+			if !strings.Contains(allLogs, wantPath) {
+				t.Fatalf("launch log missing absolute path %q; got:\n%s", wantPath, allLogs)
 			}
 		})
 	}
