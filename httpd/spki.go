@@ -13,7 +13,7 @@ import (
 //
 // The output is a stable 44-character base64 string for a given certificate.
 func DevCertSPKI() (string, error) {
-	der, err := DevCertDER()
+	der, err := devCertLeafDER()
 	if err != nil {
 		return "", err
 	}

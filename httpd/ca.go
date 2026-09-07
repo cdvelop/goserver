@@ -2,9 +2,9 @@ package httpd
 
 import "errors"
 
-// CAPath is where the development certificate is served so a device on the LAN
-// can install it and trust the dev certificate. The internal dev server and the
-// generated server main both serve DevCertDER() here with CADownloadContentType.
+// CAPath is where the development certificate authority is served so a device on
+// the LAN can install it and trust the dev server. The internal dev server and
+// the generated server main both serve DevCA() here with CADownloadContentType.
 //
 // iOS needs two steps and hints at neither: install the profile (Settings →
 // Profile Downloaded), then enable it under Settings → General → About →

@@ -81,7 +81,7 @@ func main() {
 	// Serve the development CA so a device on the LAN can install it and trust
 	// the dev certificate. Responds 503 when no dev certificate exists.
 	s.Router().PublicAsset(httpd.CAPath, func(c router.Context) {
-		der, err := httpd.DevCertDER()
+		der, err := httpd.DevCA()
 		if err != nil {
 			c.WriteStatus(503)
 			return
